@@ -64,14 +64,21 @@ jobs:
         with:
           workspaces: 'src-tauri -> target'
           key: ${{ matrix.edicion }}
-      - name: Instalar Tauri CLI 2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar Tauri CLI 2 precompilada
         shell: pwsh
-        run: cargo install tauri-cli --version '^2' --locked
+        run: |
+          npm install --global '@tauri-apps/cli@2'
+          if ($LASTEXITCODE -ne 0) { throw 'Error instalando Tauri CLI' }
+          tauri --version
+          if ($LASTEXITCODE -ne 0) { throw 'Tauri CLI no disponible' }
       - name: Compilar NSIS con WebView2 incluido
         shell: pwsh
         working-directory: src-tauri
         run: |
-          cargo tauri build ${{ matrix.config }} --bundles nsis
+          tauri build ${{ matrix.config }} --bundles nsis
           if ($LASTEXITCODE -ne 0) { throw 'Compilacion Tauri fallida' }
       - name: Nombrar EXE y generar SHA-256
         shell: pwsh
