@@ -1,0 +1,11 @@
+{
+  "identifier": "default",
+  "description": "Ventana principal; apertura de enlaces y guardado nativo autorizado por el usuario.",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    "opener:default"
+  ]
+}

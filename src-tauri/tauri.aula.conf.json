@@ -1,0 +1,21 @@
+{
+  "productName": "CONTA FP360 Aula",
+  "identifier": "es.atreyuserviciosdigitales.contafp360.aula",
+  "build": {
+    "frontendDist": "../web/aula"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "CONTA FP360 Aula · Alumnado",
+        "width": 1400,
+        "height": 900,
+        "minWidth": 970,
+        "minHeight": 660,
+        "center": true,
+        "useHttpsScheme": true
+      }
+    ]
+  }
+}

@@ -1,0 +1,94 @@
+name: CONTA FP360 Desktop - instaladores Windows
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'src-tauri/**'
+      - 'rust-toolchain.toml'
+      - 'tests/**'
+      - '.github/workflows/windows.yml'
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    name: Integridad y navegador
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validar proyecto
+        run: python tests/validate_project.py
+      - name: Comprobar JavaScript
+        run: python tests/check_embedded_scripts.py
+      - name: Instalar Chromium de pruebas
+        run: |
+          python -m pip install 'playwright==1.56.0'
+          python -m playwright install --with-deps chromium
+      - name: Probar interfaz y exportaciones simuladas
+        run: python tests/smoke_browser.py
+
+  windows:
+    name: Instalador ${{ matrix.edicion }} x64
+    needs: validar
+    runs-on: windows-2022
+    timeout-minutes: 100
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - edicion: Studio
+            config: ''
+            artifact: CONTA-FP360-Studio-Windows-x64
+          - edicion: Aula
+            config: '--config tauri.aula.conf.json'
+            artifact: CONTA-FP360-Aula-Windows-x64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar Rust MSVC
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'src-tauri -> target'
+          key: ${{ matrix.edicion }}
+      - name: Instalar Tauri CLI 2
+        shell: pwsh
+        run: cargo install tauri-cli --version '^2' --locked
+      - name: Compilar NSIS con WebView2 incluido
+        shell: pwsh
+        working-directory: src-tauri
+        run: |
+          cargo tauri build ${{ matrix.config }} --bundles nsis
+          if ($LASTEXITCODE -ne 0) { throw 'Compilacion Tauri fallida' }
+      - name: Nombrar EXE y generar SHA-256
+        shell: pwsh
+        run: |
+          $files = @(Get-ChildItem -Path 'src-tauri/target/release/bundle/nsis/*-setup.exe' -File)
+          if ($files.Count -ne 1) { throw "Se esperaba un NSIS, encontrados: $($files.Count)" }
+          New-Item -ItemType Directory -Force -Path paquete | Out-Null
+          $name = 'CONTA-FP360-${{ matrix.edicion }}-2.1.0-Windows-x64-setup.exe'
+          $dest = Join-Path paquete $name
+          Copy-Item -LiteralPath $files[0].FullName -Destination $dest
+          if ((Get-Item $dest).Length -lt 1000000) { throw 'Instalador demasiado pequeno' }
+          $hash = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  $name" | Set-Content -Path "$dest.sha256" -Encoding ascii
+      - name: Guardar instaladores
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: paquete/*
+          if-no-files-found: error
+          retention-days: 30
