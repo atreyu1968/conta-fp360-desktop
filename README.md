@@ -20,6 +20,15 @@ En GitHub, abra **Actions → CONTA FP360 Desktop - instaladores Windows**. Se e
 
 Cada artefacto incluye un instalador EXE NSIS y un fichero SHA-256. Se construyen por separado en windows-2022. **No se considera verificada la compilación hasta que GitHub Actions termine correctamente**.
 
+## Linux x64 (nuevo)
+
+Este repositorio también incluye una canalización separada de **Linux** en `.github/workflows/linux.yml`.
+Compila **Studio** y **Aula** desde los mismos recursos locales y genera paquetes **DEB** (Ubuntu/Debian/Mint) y **AppImage** (varias distribuciones), con sus SHA-256. Utiliza Ubuntu 22.04 como base de compilación.
+
+En GitHub, abra **Actions → CONTA FP360 Desktop - paquetes Linux** para consultar el estado y descargar los paquetes. La disponibilidad depende de que los trabajos terminen correctamente. Consulte [LINUX.md](LINUX.md) para instalación, compatibilidad y pruebas pendientes.
+
+La compilación Linux no modifica ni sustituye la canalización de Windows. El empaquetado no demuestra todavía el funcionamiento completo de impresión, PDF y persistencia en un equipo Linux real.
+
 ## Compilación manual
 
 Instale Rust, Microsoft C++ Build Tools y Tauri CLI 2. Desde el directorio src-tauri ejecute:
