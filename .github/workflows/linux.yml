@@ -1,0 +1,108 @@
+name: CONTA FP360 Desktop - paquetes Linux
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'src-tauri/**'
+      - 'rust-toolchain.toml'
+      - 'tests/**'
+      - '.github/workflows/linux.yml'
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validar:
+    name: Integridad y navegador
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validar estructura y separacion Studio/Aula
+        run: python tests/validate_project.py
+      - name: Comprobar sintaxis JavaScript
+        run: python tests/check_embedded_scripts.py
+      - name: Instalar navegador de pruebas
+        run: |
+          python -m pip install 'playwright==1.56.0'
+          python -m playwright install --with-deps chromium
+      - name: Probar interfaz y exportaciones simuladas
+        run: python tests/smoke_browser.py
+
+  linux:
+    name: Paquetes ${{ matrix.edicion }} Linux x64
+    needs: validar
+    runs-on: ubuntu-22.04
+    timeout-minutes: 110
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - edicion: Studio
+            config: ''
+            artifact: CONTA-FP360-Studio-Linux-x64
+          - edicion: Aula
+            config: '--config tauri.aula.conf.json'
+            artifact: CONTA-FP360-Aula-Linux-x64
+    steps:
+      - uses: actions/checkout@v4
+      - name: Instalar dependencias Linux de Tauri 2
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev \
+            librsvg2-dev libfuse2 pkg-config patchelf
+      - name: Instalar Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Rust
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'src-tauri -> target'
+          key: linux-${{ matrix.edicion }}-x64
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Instalar Tauri CLI 2
+        run: |
+          npm install --global '@tauri-apps/cli@2'
+          tauri --version
+      - name: Compilar DEB y AppImage
+        working-directory: src-tauri
+        run: tauri build ${{ matrix.config }} --bundles deb,appimage
+      - name: Verificar y nombrar paquetes
+        shell: bash
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          debs=(src-tauri/target/release/bundle/deb/*.deb)
+          appimages=(src-tauri/target/release/bundle/appimage/*.AppImage)
+          if [[ ${#debs[@]} -ne 1 || ${#appimages[@]} -ne 1 ]]; then
+            echo "Se esperaba un DEB y un AppImage; DEB=${#debs[@]} AppImage=${#appimages[@]}" >&2
+            exit 1
+          fi
+          mkdir -p paquete
+          cp "${debs[0]}" "paquete/CONTA-FP360-${{ matrix.edicion }}-2.1.0-Linux-x64.deb"
+          cp "${appimages[0]}" "paquete/CONTA-FP360-${{ matrix.edicion }}-2.1.0-Linux-x64.AppImage"
+          for f in paquete/*.deb paquete/*.AppImage; do
+            test "$(stat -c%s "$f")" -gt 1000000
+          done
+          (cd paquete && sha256sum -- *.deb *.AppImage > SHA256SUMS.txt)
+      - name: Publicar artefactos
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: paquete/*
+          if-no-files-found: error
+          retention-days: 30
