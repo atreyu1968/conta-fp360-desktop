@@ -148,7 +148,7 @@ def test_http():
             json_request(base,'curricula',{'module_code':'0441','territory':'Canarias','version':'prueba-esquema','source_url':'https://www.boe.es/buscar/act.php?id=BOE-A-2009-19148','criteria':['RA4.a','RA4.b']},admin)
             json_request(base,'library',{'title':'Otro','external_id':'TEST-INVALID','module_code':'0441','criteria':[{'code':'RA9.z','ra':'RA9'}],'zip_base64':makezip('TEST-INVALID')},t,expected=422)
             # Restablecimiento administrativo revoca sesiones y obliga a nuevo cambio.
-            json_request(base,'reset_password',{'user_id':json_request(base,'users',None,admin)['items'][0]['id'],'new_password':'AnotherTempPass1234!'},admin)
+            json_request(base,'reset_password',{'user_id':next(x['id'] for x in json_request(base,'users',None,admin)['items'] if x['email']==teacher),'new_password':'AnotherTempPass1234!'},admin)
             json_request(base,'logout',{},st)
             json_request(base,'pull',None,st,expected=401)
             # Limitación de acceso por contraseña para un correo inexistente.
