@@ -23,49 +23,44 @@ EXCLUDED_SUFFIXES = {".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm",
 REQUIRED = {"index.php", "api.php", "bootstrap.php", "features.php",
             "config.example.php", "schema.sql", "install.php", ".htaccess",
             "assets/dashboard.js", "assets/visual.js"}
-DOC = """CONTA FP360 CENTRAL · INSTALADOR AUTOMÁTICO 2.4 PARA CPANEL
+DOC = """CONTA FP360 CENTRAL · INSTALADOR 2.5 SIN CLAVE PARA CPANEL
 Destino: https://conta.redfp360.net
 
-ANTES DE EMPEZAR
-- PHP 8.2 o superior, PDO_SQLITE, SQLite3, ZIP y HTTPS válidos.
-- El directorio raíz del subdominio debe permitir escribir un archivo config.php.
-- Copia de seguridad del alojamiento anterior antes de reemplazar el programa.
+RECOMENDACIÓN DE SEGURIDAD
+Antes de subir los archivos, utilice «cPanel → Privacidad de directorios»
+para proteger temporalmente la raíz del subdominio. Sin clave de instalación,
+el primer visitante puede registrar una cuenta administradora. Si su panel
+no permite privacidad de directorios, restrinja temporalmente el acceso por
+IP o evite dejar el instalador accesible al público.
 
-INSTALACIÓN (SIN EDITAR CONFIG.PHP)
-1. Suba el ZIP de este paquete a la carpeta raíz del subdominio y extráigalo.
-   Los archivos index.php, api.php, install.php y .htaccess deben quedar
-   directamente en esa carpeta. Active Mostrar archivos ocultos en cPanel.
-   Al reemplazar una instalación anterior, compruebe que .htaccess sea el
-   incluido en este paquete. No suba datos reales ni contraseñas en el ZIP.
-2. Abra https://conta.redfp360.net/install.php en un navegador por HTTPS.
-3. El instalador crea una carpeta privada en la carpeta personal de cPanel
-   llamada .conta-fp360 y un archivo instalacion.clave. Este archivo NO se
-   publica por HTTP: se abre desde cPanel > Administrador de archivos >
-   carpeta principal (HOME) > Mostrar ocultos > .conta-fp360.
-4. Copie el código del archivo instalacion.clave en el formulario del
-   instalador e introduzca centro, nombre de administrador, correo y clave.
-   La autorización evita que otro visitante del nuevo sitio se registre
-   como administrador antes que usted.
-5. El instalador valida los requisitos, genera config.php automáticamente,
-   repara una ruta SQLite anterior incorrecta (si no hay base de datos
-   previa que proteger), crea SQLite y el usuario administrativo.
-6. Si tras el éxito sigue presente install.php, bórrelo manualmente
-   (el instalador intenta eliminarse por sí solo).
-7. Abra https://conta.redfp360.net/api.php?r=health (ok e initialized=true)
-   y acceda a https://conta.redfp360.net con el usuario creado.
-8. En los botones Central de Studio y Aula, introduzca únicamente
-   https://conta.redfp360.net e inicie sesión con cuentas individuales.
+INSTALACIÓN
+1. Compruebe PHP 8.2+, HTTPS y extensiones PDO_SQLITE, SQLite3 y ZIP.
+2. Haga copia de seguridad del config.php anterior y de la base de datos.
+3. Extraiga el ZIP de este paquete en la raíz de conta.redfp360.net,
+   incluido .htaccess. No deje una carpeta intermedia llamada cpanel.
+4. Abra https://conta.redfp360.net/install.php
+5. El instalador muestra un diagnóstico de requisitos. Introduzca SOLO:
+   - Nombre del centro educativo.
+   - Nombre del administrador.
+   - Correo electrónico del administrador.
+   - Contraseña segura del administrador (mínimo 12 caracteres).
+   NO se introduce clave de instalación; NO se edita config.php.
+6. Pulse Instalar Central. El instalador creará config.php, la base SQLite
+   y directorios privados en HOME/.conta-fp360, fuera de la web.
+7. Si install.php permanece, elimínelo manualmente. Compruebe que no
+   sea accesible. Quite la privacidad temporal del directorio, para
+   permitir acceso normal a Central y a las aplicaciones.
+8. Compruebe https://conta.redfp360.net/api.php?r=health:
+   ok=true, initialized=true. Entre a https://conta.redfp360.net
+   con su administrador.
+9. En Studio y Aula use https://conta.redfp360.net como URL de Central.
 
-SEGURIDAD
-- No es necesario editar config.example.php para una instalación nueva.
-- La clave instalacion.clave es temporal, generada en el hosting y borrada
-  al completar la instalación. No se imprime en el navegador ni se envía
-  por correo. Nunca introduzca claves en incidencias ni en GitHub.
-- Las bases y los paquetes están fuera de las carpetas públicas.
-- No active permisos 777. No continúe con datos reales sin la comprobación
-  RGPD/LOPDGDD y una copia de seguridad consistente de SQLite.
-- Si la instalación informa de que HOME no es escribible, deberá revisar
-  el propietario/permisos de la cuenta PHP con el proveedor.
+NOTAS
+- La contraseña de administrador NO es una clave de instalación.
+- El archivo antiguo instalacion.clave, si existe, ya no se utiliza.
+- Si hay base de datos previa, el asistente nunca la sobrescribe sin más.
+- No active permisos 777. No utilice datos reales antes de verificar
+  la protección de datos, los permisos y las copias de seguridad.
 """
 def main():
     if not SRC.is_dir():
