@@ -290,7 +290,13 @@ try {
    } else {
      $rows=fetch_all('SELECT a.id AS assignment_id,a.due_at,a.max_attempts,e.id AS exercise_id,e.title,e.external_id,e.revision,e.module_code,e.criteria_json,e.sha256,g.name AS group_name FROM assignments a JOIN groups g ON g.id=a.group_id JOIN exercises e ON e.id=a.exercise_id WHERE g.school_id=?'.($u['role']==='teacher'?' AND g.teacher_id=?':'').' ORDER BY a.id DESC',$u['role']==='teacher'?[$u['school_id'],$u['id']]:[$u['school_id']]);
    }
-   foreach($rows as &$x){$x['criteria']=json_decode($x['criteria_json'],true);unset($x['criteria_json']);}
+   foreach($rows as &$x){
+     $x['criteria']=json_decode($x['criteria_json'],true);unset($x['criteria_json']);
+     if($u['role']==='student'){
+       $used=fetch_one('SELECT COALESCE(MAX(attempt),0) AS last_attempt FROM submissions WHERE assignment_id=? AND student_id=?',[$x['assignment_id'],$u['id']]);
+       $x['used_attempts']=(int)($used['last_attempt']??0);
+     }
+   }
    respond(['ok'=>true,'items'=>$rows]);
  }
  if ($route==='package' && $method==='GET') {
