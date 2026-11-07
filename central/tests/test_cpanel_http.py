@@ -149,6 +149,18 @@ def test_http():
             json_request(base,'library',{'title':'Otro','external_id':'TEST-INVALID','module_code':'0441','criteria':[{'code':'RA9.z','ra':'RA9'}],'zip_base64':makezip('TEST-INVALID')},t,expected=422)
             # Restablecimiento administrativo revoca sesiones y obliga a nuevo cambio.
             json_request(base,'reset_password',{'user_id':next(x['id'] for x in json_request(base,'users',None,admin)['items'] if x['email']==teacher),'new_password':'AnotherTempPass1234!'},admin)
+            # Multicentro: alta reservada al titular, separación entre grupos y datos.
+            schools=json_request(base,'schools',None,admin)
+            ok(schools['can_create'] is True and len(schools['items'])==1,'No se reconoce al propietario del servidor')
+            school=json_request(base,'schools',{'name':'IES Isla de Prueba','admin_name':'Admin segundo centro','admin_email':'admin2@example.test','admin_password':'StrongSchoolPass1234!'},admin,expected=201)
+            new_adm=json_request(base,'login',{'email':'admin2@example.test','password':'StrongSchoolPass1234!'})['token']
+            json_request(base,'groups',None,new_adm,expected=403)
+            json_request(base,'change_password',{'current_password':'StrongSchoolPass1234!','new_password':'NewSchoolPass5678!'},new_adm)
+            new_adm=json_request(base,'login',{'email':'admin2@example.test','password':'NewSchoolPass5678!'})['token']
+            own=json_request(base,'groups',None,new_adm)
+            ok(own['items']==[],'Datos de grupo filtrados entre centros')
+            json_request(base,'report',None,new_adm,{'group_id':group},expected=403)
+            json_request(base,'schools',{'name':'Centro ilegítimo','admin_name':'User','admin_email':'x@example.test','admin_password':'VeryStrong12345!'},new_adm,expected=403)
             json_request(base,'logout',{},st)
             json_request(base,'pull',None,st,expected=401)
             # Limitación de acceso por contraseña para un correo inexistente.
@@ -162,7 +174,7 @@ def test_http():
 
 def php_config(dst,secret):
     def sq(v):return "'"+str(v).replace('\\','\\\\').replace("'","\\'")+"'"
-    fields={'install_secret':secret,'base_url':'https://example.test/central','db_path':str(dst/'private'/'conta.sqlite3'),'upload_dir':str(dst/'private'/'packages'),'token_hours':8,'max_package_bytes':25*1024*1024,'max_submission_bytes':3*1024*1024}
+    fields={'platform_owner_email':'admin@example.test','install_secret':secret,'base_url':'https://example.test/central','db_path':str(dst/'private'/'conta.sqlite3'),'upload_dir':str(dst/'private'/'packages'),'token_hours':8,'max_package_bytes':25*1024*1024,'max_submission_bytes':3*1024*1024}
     return '['+','.join(sq(k)+'=>'+str(v) if isinstance(v,int) else sq(k)+'=>'+sq(v) for k,v in fields.items())+']'
 
 if __name__=='__main__':test_http()
