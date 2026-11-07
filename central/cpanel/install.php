@@ -255,7 +255,7 @@ try {
             $sql=file_get_contents(__DIR__.'/schema.sql');
             if (!is_string($sql)) throw new RuntimeException('Falta schema.sql.');
             $pdo->exec($sql);
-            $pdo->exec('BEGIN IMMEDIATE');
+            $pdo->beginTransaction();
             try {
                 if ((int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn()>0)
                     throw new RuntimeException('Ya existe un administrador. No se permite volver a instalar.');
