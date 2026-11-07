@@ -6,10 +6,21 @@ if(!d?.dbGet||!d?.dbSet)return;
 let studio=false;
 const $=s=>document.querySelector(s);
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-let token=null,user=null,server=localStorage.getItem('cfp360_central_url')||'';
+let token=null,user=null,localUser=null,server=localStorage.getItem('cfp360_central_url')||'';
 let groups=[],library=[],assignments=[],report=null,busy=false;
-d.ready.then(()=>{server=localStorage.getItem('cfp360_central_url')||server;}).catch(console.warn);
-const load=k=>d.dbGet('central_'+k),save=(k,v)=>d.dbSet('central_'+k,v);
+const identityReady=d.ready.then(async()=>{
+  server=localStorage.getItem('cfp360_central_url')||server;
+  localUser=await d.dbGet('central_identity')||null;
+}).catch(err=>{console.error('Perfil offline:',err);throw err;});
+const privateKeys=new Set(['queue','groups','library','report','assignments','active_assignment','attempts']);
+async function storageKey(k){
+ await identityReady;
+ if(!privateKeys.has(k)) return 'central_'+k;
+ if(!localUser?.id)throw Error('Debe autenticar por primera vez este perfil de ordenador antes de trabajar offline.');
+ return 'central_profile_'+localUser.school_id+'_'+localUser.id+'_'+k;
+}
+const load=async k=>d.dbGet(await storageKey(k));
+const save=async(k,v)=>d.dbSet(await storageKey(k),v);
 function baseUrl(){
  const u=new URL(server.trim());
  if(u.protocol!=='https:'&&!(u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)))throw Error('Se exige servidor HTTPS');
@@ -32,9 +43,10 @@ function choices(data,id,name){return data.map(x=>'<option value="'+escape(x[id]
 function render(){
  const box=$('#central-modal');if(!box)return;
  const auth=user?'<p>'+escape(user.name)+' · '+escape(user.role)+'</p>'+button('logout','Cerrar sesión'):('<label>Correo<input id="central-email" type="email"></label><label>Contraseña<input id="central-password" type="password"></label>'+button('login','Iniciar sesión'));
+ const profile=localUser?'<p class="central-local-profile">Perfil offline de este ordenador: '+escape(localUser.name)+' ('+escape(localUser.role)+')</p>':'';
  const tools=studio?'<h3>Studio: biblioteca y grupos</h3><p>Genere primero el ZIP de alumnado desde Publicar paquete.</p><label>ZIP de alumnado<input id="central-zip" type="file" accept=".zip"></label><label>Revisión<input id="central-revision" type="number" min="1" value="1"></label>'+button('publish','Guardar publicación offline')+'<label>Grupo<select id="central-group">'+choices(groups,'id','name')+'</select></label><label>Ejercicio<select id="central-exercise">'+choices(library,'id','title')+'</select></label>'+button('assign','Asignar ahora')+button('report','Recibir calificaciones RA y CE')+'<div id="central-report"></div>'
  :'<h3>Aula: ejercicios y entregas</h3><label>Ejercicios asignados<select id="central-assignment">'+choices(assignments,'assignment_id','title')+'</select></label>'+button('download','Descargar y abrir')+button('prepare','Preparar entrega offline')+'<p>Sin Internet, los asientos y respuestas permanecen en SQLite local.</p>';
- box.innerHTML='<div class="central-dialog"><div class="central-head"><h2>CONTA FP360 · Central</h2>'+button('close','✕')+'</div><label>Dirección HTTPS de cPanel<input id="central-server" type="url" value="'+escape(server)+'" placeholder="https://dominio.es/conta-fp360"></label>'+auth+'<hr>'+tools+'<hr>'+button('receive','Recibir')+button('send','Enviar pendientes')+button('update','Comprobar GitHub')+'<p id="central-status" role="status">Trabajo local disponible sin conexión.</p></div>';
+ box.innerHTML='<div class="central-dialog"><div class="central-head"><h2>CONTA FP360 · Central</h2>'+button('close','✕')+'</div><label>Dirección HTTPS de cPanel<input id="central-server" type="url" value="'+escape(server)+'" placeholder="https://dominio.es/conta-fp360"></label>'+auth+profile+'<hr>'+tools+'<hr>'+button('receive','Recibir')+button('send','Enviar pendientes')+button('update','Comprobar GitHub')+'<p id="central-status" role="status">Trabajo local disponible sin conexión.</p></div>';
 }
 function showReport(report){
  const slot=$('#central-report');if(!slot||!report)return;
@@ -42,13 +54,18 @@ function showReport(report){
  slot.innerHTML='<div style="max-height:230px;overflow:auto"><table style="font-size:11px"><thead><tr><th>Alumno</th><th>Ejercicio</th><th>CE</th></tr></thead>'+lines.join('')+'</table></div>'+button('export','Exportar informe JSON');
 }
 async function queue(action,payload){
- const items=await load('queue')||[];items.push({id:crypto.randomUUID(),action,payload});
+ await identityReady;
+ if(!localUser)throw Error('Autentique este perfil de ordenador al menos una vez para habilitar entregas offline.');
+ if(action==='submit' && localUser.role!=='student')throw Error('El perfil offline no pertenece al alumnado.');
+ if(action==='publish' && !['admin','teacher'].includes(localUser.role))throw Error('El perfil offline no pertenece al profesorado.');
+ const items=await load('queue')||[];items.push({id:crypto.randomUUID(),owner_id:localUser.id,action,payload});
  await save('queue',items);status('Operación guardada sin conexión. Pendientes: '+items.length);
 }
 async function send(){
- if(!user)throw Error('Acceda con su cuenta');
+ if(!user||!localUser||Number(user.id)!==Number(localUser.id))throw Error('Debe iniciar sesión con el propietario del perfil offline para sincronizar.');
  const items=await load('queue')||[];const pending=[];let sent=0;
  for(const it of items){try{
+  if(it.owner_id!==localUser.id)throw Error('Bloqueado: entrega de otro usuario');
   if(it.action==='publish'&&!['teacher','admin'].includes(user.role))throw Error('Cuenta docente necesaria');
   if(it.action==='submit'&&user.role!=='student')throw Error('Cuenta de alumno necesaria');
   await api(it.action==='publish'?'library':'submit',it.payload);sent++;
@@ -88,10 +105,14 @@ async function prepare(){
  const parse=k=>{try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}};
  const journal=parse('cfp360_journal_'+id)||{},activities=parse('cfp360_actividades_'+id)||{};
  if(!Array.isArray(journal.asientos)&&!Object.keys(activities).length)throw Error('No hay trabajo para entregar');
- const attempts=await load('attempts')||{},attempt=Number(attempts[a.assignment_id]||0)+1;
+ if(!localUser || localUser.role!=='student')throw Error('El dispositivo debe estar vinculado a un perfil de alumno.');
+ const attempts=await load('attempts')||{};
+ const queued=(await load('queue')||[]).filter(x=>x.action==='submit' && Number(x.payload.assignment_id)===Number(a.assignment_id));
+ const used=queued.reduce((m,x)=>Math.max(m,Number(x.payload.attempt||0)),Number(attempts[a.assignment_id]||0));
+ const attempt=used+1;
  if(attempt>Number(a.max_attempts||3))throw Error('Límite de intentos agotado');
- attempts[a.assignment_id]=attempt;await save('attempts',attempts);
  await queue('submit',{assignment_id:+a.assignment_id,attempt,event_id:crypto.randomUUID(),work:{manifest_id:id,asientos:journal.asientos||[],cuentas:journal.cuentas||{},cuentasTerceros:journal.cuentasTerceros||{},respuestasActividades:activities,evaluacionProvisional:parse('cfp360_evaluacion_'+id),fechaPreparacion:new Date().toISOString()}});
+ attempts[a.assignment_id]=attempt;await save('attempts',attempts);
 }
 async function update(){
  await d.flush?.();
@@ -107,7 +128,16 @@ async function act(type){
  if(type==='logout'){token=null;user=null;render();return;}
  if(busy)return;busy=true;
  try{
-  if(type==='login'){const r=await api('login',{email:$('#central-email').value,password:$('#central-password').value});token=r.token;user=r.user;render();status('Sesión iniciada');}
+  if(type==='login'){
+   await identityReady;
+   const r=await api('login',{email:$('#central-email').value,password:$('#central-password').value});
+   const next={...r.user,server:baseUrl()};
+   if(localUser && (Number(localUser.id)!==Number(next.id)||Number(localUser.school_id)!==Number(next.school_id)||localUser.server!==next.server)){
+     throw Error('Este perfil offline contiene trabajos de otro usuario o servidor. Use una cuenta independiente del sistema operativo para proteger los datos del alumnado.');
+   }
+   if(!localUser){localUser=next;await d.dbSet('central_identity',next);}
+   token=r.token;user=r.user;render();status('Sesión iniciada; los datos offline pertenecen a este usuario.');
+  }
   if(type==='receive')await receive();
   if(type==='send')await send();
   if(type==='publish')await publish();
@@ -126,7 +156,7 @@ function open(){
  area.addEventListener('click',e=>{const button=e.target.closest('button[data-central]');if(button)act(button.dataset.central);else if(e.target===area)area.remove();});
  area.addEventListener('change',e=>{if(e.target.id==='central-server'){try{const u=new URL(e.target.value);if(u.protocol!=='https:'&&!['localhost','127.0.0.1'].includes(u.hostname))throw Error('HTTPS obligatorio');server=u.href.replace(/\/+$/,'');localStorage.setItem('cfp360_central_url',server);status('Servidor guardado');}catch(err){status(err.message,true);}}});
  document.body.appendChild(area);render();
- const tasks=studio?Promise.all([load('groups'),load('library'),load('report')]):Promise.all([load('assignments')]);
+ const tasks=identityReady.then(()=>localUser ? (studio?Promise.all([load('groups'),load('library'),load('report')]):Promise.all([load('assignments')])) : []);
  tasks.then(values=>{if(studio){groups=values[0]||[];library=values[1]||[];report=values[2]||null;}else assignments=values[0]||[];if($('#central-modal')){render();if(report)showReport(report);}}).catch(console.warn);
 }
 function setup(){
@@ -138,5 +168,5 @@ function setup(){
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup();
 window.addEventListener('load',()=>setTimeout(()=>window.__TAURI__?.core?.invoke('cfp_check_update').then(v=>{if(v?.available){const b=$('#cfp-central-button');if(b)b.textContent='⬆ Actualizar a '+v.version;}}).catch(()=>{}),1500));
 window.addEventListener('online',()=>{if(user)send().catch(console.warn);});
-window.CONTA_CENTRAL=Object.freeze({open,send,receive,prepare});
+window.CONTA_CENTRAL=Object.freeze({open,send,receive,prepare,identityReady});
 })();
