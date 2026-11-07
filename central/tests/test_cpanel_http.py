@@ -115,6 +115,7 @@ def test_http():
             ok(len(pulled)==1 and pulled[0]['assignment_id']==aid,'No llega la asignación al alumno')
             pkg=json_request(base,'package',None,st,{'id':exercise});ok(len(pkg)>30,'Paquete corrupto')
             delivery={'assignment_id':aid,'attempt':1,'event_id':'TESTOFFLINE2026A1','work':{'manifest_id':identifier,'asientos':[{'id':'1','debe':500,'haber':500}]}}
+            json_request(base,'submit',{**delivery,'event_id':'WRONGMANIFEST2026','work':{'manifest_id':'OTRO-SUPUESTO','asientos':[{'id':'1'}]}},st,expected=422)
             accepted=json_request(base,'submit',delivery,st,expected=201)
             ok(accepted['late'] is True,'No se ha marcado como tardía una entrega offline recibida fuera del plazo')
             repeated=json_request(base,'submit',delivery,st)
