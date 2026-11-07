@@ -836,7 +836,7 @@ async function start() {
 function save() { projects[project.id] = (0, utils_js_1.deepCopy)(project); try {
     localStorage.setItem('cfp360_studio_library', JSON.stringify(projects));
     localStorage.setItem('cfp360_studio_last', project.id);
-    (0, utils_js_1.alertBox)('Proyecto guardado en este navegador.', 'success');
+    (0, utils_js_1.alertBox)('Proyecto guardado en el almacenamiento local.', 'success');
 }
 catch (e) {
     (0, utils_js_1.alertBox)('El navegador no permite guardar localmente. Exporte el JSON docente para conservar el proyecto.', 'error');
