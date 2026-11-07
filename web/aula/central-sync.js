@@ -120,7 +120,10 @@ async function publish(){
  if(file.size>25*1024*1024)throw Error('ZIP mayor de 25 MB');
  const bytes=new Uint8Array(await file.arrayBuffer());let str='';
  for(let i=0;i<bytes.length;i+=8192)str+=String.fromCharCode(...bytes.subarray(i,i+8192));
- const criteria=[...new Set((project.operaciones||[]).flatMap(x=>x.criteriosTrabajados||[]))].filter(x=>/^RA\d+\.[a-z]$/.test(x)).map(code=>({code,ra:code.split('.')[0]}));
+ const criteria=[...new Set([
+   ...(project.operaciones||[]).flatMap(x=>x.criteriosTrabajados||[]),
+   ...(project.evaluacionActividades||[]).flatMap(x=>x.criterios||[])
+ ])].filter(x=>/^RA\d+\.[a-z]$/.test(x)).map(code=>({code,ra:code.split('.')[0]}));
  await queue('publish',{external_id:project.id,title:project.titulo||project.id,module_code:String(project.curriculo?.modulo?.codigo||'SIN-MODULO'),curriculum:project.curriculo?.fuenteEstatal?.url||'',revision:+$('#central-revision').value,criteria,zip_base64:btoa(str)});
 }
 function bytesToBase64(bytes){
