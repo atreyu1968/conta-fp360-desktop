@@ -79,6 +79,33 @@ try {
    }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
    respond(['ok'=>true,'must_change_password'=>true]);
  }
+ if ($route==='schools' && $method==='GET') {
+   require_auth(['admin']);
+   $owner=strtolower((string)(cfg()['platform_owner_email']??''));
+   $allowed=$owner!==''&&hash_equals($owner,strtolower((string)$u['email']));
+   $rows=$allowed?fetch_all('SELECT id,name FROM schools ORDER BY name'):fetch_all('SELECT id,name FROM schools WHERE id=?',[$u['school_id']]);
+   respond(['ok'=>true,'can_create'=>$allowed,'items'=>$rows]);
+ }
+ if ($route==='schools' && $method==='POST') {
+   require_auth(['admin']);
+   $owner=strtolower((string)(cfg()['platform_owner_email']??''));
+   if($owner===''||!hash_equals($owner,strtolower((string)$u['email'])))fail(403,'Alta de centros reservada al administrador general definido en config.php');
+   $in=json_in();$name=required_string($in,'name',180);
+   $adminName=required_string($in,'admin_name',180);$email=strtolower(required_string($in,'admin_email',240));$pass=required_string($in,'admin_password',500);
+   secure_new_password($pass);
+   if(!filter_var($email,FILTER_VALIDATE_EMAIL))fail(422,'Correo de administrador incorrecto');
+   $db->beginTransaction();
+   try {
+     $db->prepare('INSERT INTO schools(name) VALUES(?)')->execute([$name]);$school=(int)$db->lastInsertId();
+     $db->prepare('INSERT INTO users(school_id,email,display_name,role,passhash) VALUES(?,?,?,?,?)')
+        ->execute([$school,$email,$adminName,'admin',password_hash($pass,PASSWORD_DEFAULT)]);
+     $adminId=(int)$db->lastInsertId();
+     $db->prepare('INSERT INTO password_flags(user_id,must_change) VALUES(?,1)')->execute([$adminId]);
+     $db->commit();
+   }catch(PDOException $e){if($db->inTransaction())$db->rollBack();fail(409,'Centro o correo de administrador ya existe');}
+   catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+   respond(['ok'=>true,'school_id'=>$school,'admin_id'=>$adminId],201);
+ }
  if ($route==='curricula' && $method==='GET') {
    require_auth(['admin','teacher']);$rows=fetch_all('SELECT module_code,territory,source_url,version,criteria_json,updated_at FROM curriculum_catalogs WHERE school_id=? ORDER BY module_code',[$u['school_id']]);
    foreach($rows as &$row){$row['criteria']=json_decode($row['criteria_json'],true);unset($row['criteria_json']);}
