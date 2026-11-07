@@ -27,7 +27,7 @@ async function refresh(){
     const sel=$('#resetUserId');
     sel.innerHTML=users.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.display_name)+' · '+esc(x.email)+'</option>').join('');
   }
-  $('.groups').forEach(el=>{const old=el.value;el.innerHTML=opt(state.groups);if(old)el.value=old;});
+  $$('.groups').forEach(el=>{const old=el.value;el.innerHTML=opt(state.groups);if(old)el.value=old;});
   $$('.exercises').forEach(el=>{const old=el.value;el.innerHTML=opt(state.library);if(old)el.value=old;});
   await refreshReport();
  }else{
