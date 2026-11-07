@@ -1,0 +1,60 @@
+name: CONTA FP360 Desktop - macOS Intel y Apple Silicon
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - 'src-tauri/**'
+      - 'scripts/fix_icons.py'
+      - '.github/workflows/macos.yml'
+permissions:
+  contents: read
+jobs:
+  macos:
+    name: macOS ${{ matrix.edicion }} ${{ matrix.target }}
+    runs-on: macos-15
+    timeout-minutes: 115
+    strategy:
+      fail-fast: false
+      matrix:
+        edicion: [Studio, Aula]
+        target: [aarch64-apple-darwin, x86_64-apple-darwin]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'src-tauri -> target'
+          key: mac-${{ matrix.edicion }}-${{ matrix.target }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Convertir iconos RGBA
+        run: |
+          python3 -m pip install --quiet Pillow
+          python3 scripts/fix_icons.py
+      - name: Instalar Tauri CLI
+        run: npm install --global '@tauri-apps/cli@2'
+      - name: Compilar aplicacion macOS y DMG
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ '${{ matrix.edicion }}' == 'Aula' ]]; then
+            tauri build --config tauri.aula.conf.json --target '${{ matrix.target }}' --bundles dmg
+          else
+            tauri build --target '${{ matrix.target }}' --bundles dmg
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CONTA-FP360-${{ matrix.edicion }}-${{ matrix.target }}-macOS
+          path: |
+            src-tauri/target/${{ matrix.target }}/release/bundle/dmg/*.dmg
+            src-tauri/target/${{ matrix.target }}/release/bundle/macos/*.app.tar.gz
+          if-no-files-found: error
+          retention-days: 30
