@@ -2,7 +2,7 @@ name: CONTA FP360 Central - PHP SQLite y API HTTP
 on:
   workflow_dispatch:
   pull_request:
-    branches: [main]
+    branches: [main, feature/central-cpanel-offline-sync]
     paths:
       - 'central/**'
       - '.github/workflows/cpanel.yml'
@@ -39,6 +39,9 @@ jobs:
         run: |
           find central/cpanel -type f -name '*.php' -print0 | xargs -0 -n1 php -l
           node --check central/cpanel/assets/dashboard.js
+          node --check central/cpanel/assets/visual.js
+          test -s central/cpanel/assets/visual.css
+          grep -q 'assets/visual.js' central/cpanel/index.php
       - name: Integridad del esquema y de las operaciones contables
         run: python central/tests/check_schema.py
       - name: Flujo HTTP integral con datos ficticios
