@@ -122,6 +122,9 @@ def test_http():
             delivery={'assignment_id':aid,'attempt':1,'event_id':'TESTOFFLINE2026A1','work':{'manifest_id':identifier,'asientos':[{'id':'1','debe':500,'haber':500}]}}
             json_request(base,'submit',{**delivery,'event_id':'WRONGMANIFEST2026','work':{'manifest_id':'OTRO-SUPUESTO','asientos':[{'id':'1'}]}},st,expected=422)
             accepted=json_request(base,'submit',delivery,st,expected=201)
+            subsequent=json_request(base,'pull',None,st)['items']
+            ok(next(x['used_attempts'] for x in subsequent if x['assignment_id']==aid)==1,
+               'El servidor no comunica los intentos ya sincronizados a otro equipo')
             ok(accepted['late'] is True,'No se ha marcado como tardía una entrega offline recibida fuera del plazo')
             repeated=json_request(base,'submit',delivery,st)
             ok(repeated['already_received'] is True and repeated['submission_id']==accepted['submission_id'],'Reintento no idempotente')
