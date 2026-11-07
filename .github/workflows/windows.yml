@@ -43,6 +43,8 @@ jobs:
         run: python tests/smoke_browser.py
       - name: Probar Central offline en Studio y Aula
         run: python tests/smoke_central.py
+      - name: Verificar interfaz web Central con Chromium
+        run: python tests/smoke_visual_central.py
 
   windows:
     name: Instalador ${{ matrix.edicion }} x64
