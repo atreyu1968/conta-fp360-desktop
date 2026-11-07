@@ -79,7 +79,7 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
             page.goto('http://127.0.0.1:'+str(server.server_port)+'/index.html',wait_until='load')
             assert page.locator('#loginForm').is_visible()
             if role=='admin':
-                page.locator('input[name=email]').fill('admin@example.test')
+                page.locator('#loginForm input[name=email]').fill('admin@example.test')
                 page.locator('#loginForm input[name=password]').fill('temporary-pass')
                 page.locator('#loginForm button').click()
                 page.locator('#changePasswordForm').wait_for(state='visible')
