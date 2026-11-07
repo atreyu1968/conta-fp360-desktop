@@ -74,6 +74,10 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Corregir iconos PNG RGBA
+        run: |
+          python3 -m pip install --quiet Pillow
+          python3 scripts/fix_icons.py
       - name: Instalar Tauri CLI 2
         run: |
           npm install --global '@tauri-apps/cli@2'
@@ -93,8 +97,8 @@ jobs:
             exit 1
           fi
           mkdir -p paquete
-          cp "${debs[0]}" "paquete/CONTA-FP360-${{ matrix.edicion }}-2.2.0-Linux-x64.deb"
-          cp "${appimages[0]}" "paquete/CONTA-FP360-${{ matrix.edicion }}-2.2.0-Linux-x64.AppImage"
+          cp "${debs[0]}" "paquete/CONTA-FP360-${{ matrix.edicion }}-2.3.0-Linux-x64.deb"
+          cp "${appimages[0]}" "paquete/CONTA-FP360-${{ matrix.edicion }}-2.3.0-Linux-x64.AppImage"
           for f in paquete/*.deb paquete/*.AppImage; do
             test "$(stat -c%s "$f")" -gt 1000000
           done
