@@ -23,7 +23,7 @@ El administrador crea usuarios docentes y alumnos, identificados por centro. El 
 
 Aula recibe los paquetes asignados al conectarse. Trabaja offline en el diario, mayor, balances, documentación y actividades. Cuando el alumno prepara una entrega, el cliente la incorpora a una cola local con `event_id` único. El servidor solo confirma la entrega y no usa las notas procedentes del cliente como calificación oficial.
 
-El profesor puede revisar entregas y registrar las notas validadas por CE e instrumento. El informe de grupo muestra **60 % portafolio + 40 % prueba objetiva solamente si ambos instrumentos están calificados** para el CE. Si falta alguno, el criterio permanece «pendiente»; el RA se calcula como media de sus CE una vez completos. Esta regla es un punto de partida específico configurable en una fase posterior para otras programaciones y módulos; no se atribuye a ningún currículo oficial sin su comprobación.
+El profesor puede revisar entregas y registrar las notas validadas por CE e instrumento. El informe de grupo muestra por defecto **60 % portafolio + 40 % prueba objetiva solamente si los instrumentos con peso positivo están calificados** para el CE. La ponderación de cada módulo puede modificarse de forma explícita en el panel. Si falta alguno, el criterio permanece «pendiente»; el RA se calcula como media de sus CE una vez completos. Esta regla es un punto de partida específico configurable en una fase posterior para otras programaciones y módulos; no se atribuye a ningún currículo oficial sin su comprobación.
 
 ## 3. API REST v1
 
@@ -46,11 +46,11 @@ Todas las rutas se publican como `https://dominio/conta-fp360/api.php?r=NOMBRE` 
 | grade | POST | Docente autorizado | Validar calificaciones por CE |
 | report?group_id=N | GET | Docente autorizado | Matriz RA/CE por grupo |
 
-**Límites de esta versión:** sin sincronización multi-empresa entre centros, sin sustitución automática de credenciales olvidadas, sin sincronización bidireccional de correcciones ya recibidas por Aula, sin firma electrónica de entregas y sin aprobación de todos los currículos autonómicos. Debe pilotarse con datos ficticios antes de manejar expedientes de alumnos reales.
+**Límites de esta versión:** la biblioteca sigue siendo por centro, las notas del alumno requieren validación docente, no existe firma electrónica de entregas y cada catálogo curricular debe cargarse y comprobarse contra su fuente oficial. El alta de nuevos centros y el restablecimiento de contraseñas son ahora operaciones administrativas auditables, aunque no sustituyen una identidad institucional federada. Debe pilotarse con datos ficticios antes de manejar expedientes de alumnos reales.
 
 ## 4. Actualizador de escritorio
 
-La integración actualizada del escritorio se mantiene en GitHub, en el mismo repositorio, bajo `web/studio/`, `web/aula/` y `src-tauri/`. Este ZIP contiene **únicamente el servidor cPanel y sus pruebas**, no los instaladores de escritorio. Actualizar desde GitHub implica **claves criptográficas de firma** (obligatorias por Tauri). La comprobación e instalación desde GitHub Releases permanece desactivada hasta generar una pareja de claves, guardar la privada en GitHub Actions Secrets y configurar la pública al compilar las aplicaciones. El certificado comercial de firma Windows y la firma/notarización macOS son requisitos de distribución adicionales, no sustitutos de la firma de actualizaciones.
+La integración actualizada del escritorio se mantiene en GitHub, en el mismo repositorio, bajo `web/studio/`, `web/aula/` y `src-tauri/`. El paquete distribuible de cPanel contiene **únicamente el servidor central y sus pruebas**, no los instaladores de escritorio. Actualizar desde GitHub implica **claves criptográficas de firma** (obligatorias por Tauri). La comprobación e instalación desde GitHub Releases permanece desactivada hasta generar una pareja de claves, guardar la privada en GitHub Actions Secrets y configurar la pública al compilar las aplicaciones. El certificado comercial de firma Windows y la firma/notarización macOS son requisitos de distribución adicionales, no sustitutos de la firma de actualizaciones.
 
 La comprobación de versiones nunca depende del servidor cPanel. No instalar una actualización si existe alguna operación local de escritura pendiente; antes de cualquier migración de esquema debe existir una copia íntegra.
 
@@ -87,3 +87,46 @@ python3 tests/test_cpanel_http.py
 ```
 
 La última prueba crea un servidor PHP local sobre `127.0.0.1` con datos ficticios, construye paquetes ZIP de prueba y elimina sus datos al finalizar. No utiliza usuarios reales ni publica contenidos en Internet.
+## 8. Refuerzo de seguridad y nueva versión funcional (auditoría noviembre 2026)
+
+**Cambios disponibles en la rama de consolidación `feature/auditoria-integral-2026-11`:**
+
+- Biblioteca local de **varios ZIP de alumnado** en SQLite, indexada por alumno y asignación; un ejercicio descargado puede volver a abrirse offline, conservando el diario y las actividades asociadas a su identificador.
+- Las publicaciones de biblioteca y asignaciones reintentadas responden `already_received=true` cuando el contenido y los parámetros son idénticos. Un mismo identificador/revisión con contenido distinto devuelve 409 y no se sobrescribe.
+- Las entregas del alumnado se confirman por `event_id` único. Las evidencias RA/CE remitidas por Aula son **informativas y no califican automáticamente** sin intervención del profesor.
+- Para altas nuevas, las contraseñas son temporales y deben sustituirse antes de operar. `change_password` permite al titular cambiarla con su clave actual; `reset_password` permite a un administrador del mismo centro restablecer las de docentes y alumnos, revocando sus sesiones.
+- Cada cambio de nota crea un asiento en `grade_history` con profesor, fecha, criterio, instrumento, anterior y nuevo valor. No se confían notas automáticas del alumno como definitivas.
+- `grading_policy` configura los pesos de portafolio y prueba por módulo; el valor inicial 60/40 responde a la programación solicitada, no a una norma general. Cada CE recibe igual peso, y cada RA se promedia por sus criterios completos.
+- `curricula` registra el **catálogo oficial de códigos** RA/CE aportado y contrastado por el administrador, con territorio, versión y URL. No se generan RA o CE de manera automática. Si `require_curriculum_catalog=true`, no se publica un ejercicio sin catálogo del módulo; cualquier código ajeno se rechaza.
+- `schools` permite al administrador general indicado mediante `platform_owner_email` crear centros y sus administradores independientes; **no** comparte calificaciones de un centro con otro.
+- Se ha corregido el panel gráfico RA/CE para evitar atributos de estilo inline incompatibles con la Content Security Policy. Las ediciones Tauri utilizan CSP restringida con recursos de aplicación locales y conexiones HTTPS.
+- Las migraciones de las nuevas tablas son aditivas (`features.php`); no sustituyen ni borran las tablas de notas antiguas.
+
+### Preparar `config.php` sin exponer datos
+
+Edite una **copia privada** de `config.example.php` y sitúela como `config.php` solo en su alojamiento. **No la añada al repositorio público**.
+
+La plantilla usa por defecto una carpeta privada derivada de `dirname(__DIR__, 2)`, adecuada cuando el programa vive en `/home/usuario/public_html/conta-fp360`. **Verifique la ruta absoluta real de su cPanel**: el gestor de archivos y la base SQLite deben quedar fuera de cualquier directorio publicado por HTTP. No ponga `install_secret`, contraseñas, tokens o claves de IA en tickets ni en repositorios.
+
+Defina `platform_owner_email` con la cuenta inicial administrativa si pretende habilitar el alta multicentro; de lo contrario, deje un valor que no coincida con usuarios para desactivar esa posibilidad.
+
+El valor `require_curriculum_catalog` debería ser `true` en producción para impedir asignaciones con referencias curriculares sin verificar. El administrador debe cargar primero el currículo vigente desde el menú de administración.
+
+### Usuarios y claves temporales
+
+El administrador crea cuentas con contraseña temporal, comunicada mediante canal seguro. En el primer acceso el usuario recibe la obligación de cambiarla. Esta operación revoca todas sus sesiones, incluida la actual. La recuperación administrativa también revoca tokens y obliga a sustituir la clave antes de acceder a datos del centro.
+
+**En equipos compartidos**, utilice cuentas independientes del sistema operativo: la base SQLite personal no cifra y aísla por sí sola las actividades de alumnos que utilicen la misma cuenta local. No se admite como equivalente una mera selección de usuarios dentro de la misma cuenta del sistema.
+
+### Matriz de aceptación obligatoria antes de producción
+
+1. Instalar servidor con PHP 8.2+ y comprobar `pdo_sqlite`, `sqlite3`, `ZipArchive`, HTTPS, ubicación privada de SQLite y reglas del hosting.
+2. Registrar oficialmente módulos, versiones curriculares y códigos RA/CE. Verificar manualmente con BOE y normativa autonómica vigente.
+3. Alta de administrador, docente y alumno, primer cambio de contraseña, revocación y restablecimiento; comprobar permisos entre centros.
+4. Publicar ejercicio ZIP desde Studio, reintentarlo tras cortar la confirmación, asignarlo a un grupo y verificar que no aparecen duplicados.
+5. Descargar **tres ejercicios** en Aula, desconectar, alternar entre ellos y reiniciar; comprobar que cada uno conserva documentos, asientos y actividades.
+6. Reconectar, enviar una entrega dos veces con el mismo evento, registrar calificaciones, modificar una nota y consultar la auditoría y la matriz por CE/RA.
+7. Generar dos `GitHub Releases` firmadas consecutivas y probar actualizaciones Tauri en instalaciones reales, incluidos respaldos SQLite y reversión por fallo.
+8. Auditar la privacidad, contratos de tratamiento, retención, copias consistentes WAL, recuperación de desastres y la carga concurrente del hosting.
+
+**Estado de distribución:** código y CI **no equivalen** a pruebas físicas del instalador, despliegue real en cPanel, firma comercial de Windows, Apple Developer ID/notarización ni aceptación institucional para datos personales. No publicar como versión estable hasta cerrar estos puntos.
