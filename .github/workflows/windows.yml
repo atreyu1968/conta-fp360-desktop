@@ -31,6 +31,8 @@ jobs:
           node-version: '22'
       - name: Validar proyecto
         run: python tests/validate_project.py
+      - name: Verificar manifiestos de actualización (sin clave de firma)
+        run: python tests/test_release_manifest.py
       - name: Comprobar JavaScript
         run: python tests/check_embedded_scripts.py
       - name: Instalar Chromium de pruebas
