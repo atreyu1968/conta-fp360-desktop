@@ -19,7 +19,12 @@ async function refresh(){
   state.groups=(await api('groups')).items;
   state.library=(await api('library')).items;
   state.assignments=(await api('pull')).items;
-  $$('.groups').forEach(el=>{const old=el.value;el.innerHTML=opt(state.groups);if(old)el.value=old;});
+  if(state.user.role==='admin'){
+    const users=(await api('users')).items.filter(x=>x.role==='teacher'||x.role==='student');
+    const sel=$('#resetUserId');
+    sel.innerHTML=users.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.display_name)+' · '+esc(x.email)+'</option>').join('');
+  }
+  $('.groups').forEach(el=>{const old=el.value;el.innerHTML=opt(state.groups);if(old)el.value=old;});
   $$('.exercises').forEach(el=>{const old=el.value;el.innerHTML=opt(state.library);if(old)el.value=old;});
   await refreshReport();
  }else{
@@ -45,15 +50,45 @@ async function bytes64(file){const bytes=new Uint8Array(await file.arrayBuffer()
 $('#loginForm').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{
  const {email,password}=formData(e.currentTarget);const data=await api('login',{email,password});state.token=data.token;state.user=data.user;
  $('#who').textContent='· '+data.user.name+' ('+data.user.role+')';
- $('#login').hidden=true;$('#app').hidden=false;$('#logout').hidden=false;
+ if(data.user.must_change_password){
+  $('#loginForm').hidden=true;$('#changePasswordForm').hidden=false;
+  $('#passwordMessage').textContent='Debe cambiar la contraseña temporal antes de usar la plataforma.';
+  return;
+ }
+ $('#login').hidden=true;$('#app').hidden=false;$('#logout').hidden=false;$('#changePasswordButton').hidden=false;
  $('#teacher').hidden=data.user.role==='student';$('#student').hidden=data.user.role!=='student';$('#admin').hidden=data.user.role!=='admin';
  $('#nav').innerHTML='<span class="pill">'+esc(data.user.role)+'</span><span class="pill">Centro '+esc(data.user.school_id)+'</span>';
  await refresh();window.CONTA_VISUAL?.onLogin(state);msg('Sesión iniciada.');
 });});
+function showChangePassword(){
+ $('#app').hidden=true;$('#login').hidden=false;$('#loginForm').hidden=true;
+ $('#changePasswordForm').hidden=false;
+ $('#passwordMessage').textContent='Cambie su contraseña desde una conexión HTTPS segura.';
+}
+$('#changePasswordButton').addEventListener('click',showChangePassword);
+$('#changePasswordForm').addEventListener('submit',e=>{e.preventDefault();
+  invoke(async()=>{
+    const f=formData(e.currentTarget);
+    await api('change_password',{current_password:f.current_password,new_password:f.new_password});
+    $('#passwordMessage').textContent='Contraseña actualizada. Inicie sesión de nuevo.';
+    location.reload();
+  }).catch(err=>{$('#passwordMessage').textContent=String(err);});
+});
 $('#logout').addEventListener('click',()=>{invoke(async()=>{await api('logout',{});location.reload();});});
 $('#createGroup').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{await api('groups',formData(e.currentTarget));await refresh();msg('Grupo creado.');});});
 $('#enroll').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{const f=formData(e.currentTarget);await api('enroll',{group_id:+f.group_id,student_email:f.student_email});msg('Alumno matriculado.');});});
-$('#newUser').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{await api('users',formData(e.currentTarget));e.currentTarget.reset();msg('Usuario creado.');});});
+$('#newUser').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{await api('users',formData(e.currentTarget));e.currentTarget.reset();await refresh();msg('Usuario creado con contraseña temporal.');});});
+$('#resetPasswordForm').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{
+  const f=formData(e.currentTarget);await api('reset_password',{user_id:+f.user_id,new_password:f.new_password});
+  e.currentTarget.reset();msg('Contraseña restablecida. El usuario deberá cambiarla al acceder.');
+});});
+$('#curriculumForm').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{
+  const f=formData(e.currentTarget);
+  const criteria=String(f.criteria).split(/[\n,;\s]+/).map(s=>s.trim()).filter(Boolean);
+  const out=await api('curricula',{module_code:f.module_code,territory:f.territory,
+    source_url:f.source_url,version:f.version,criteria});
+  msg('Catálogo registrado: '+out.registered+' criterios. Compruebe la fuente oficial.');
+});});
 $('#publish').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{
  const f=formData(e.currentTarget),zip=f.zip;if(zip.size>25*1024*1024)throw new Error('El paquete supera 25 MB');
  const criteria=String(f.criteria).split(/[\n,;]+/).map(s=>s.trim()).filter(Boolean).map(code=>({code,ra:code.split('.')[0]}));
@@ -63,8 +98,25 @@ $('#publish').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{
 $('#assign').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{const f=formData(e.currentTarget);await api('assign',{group_id:+f.group_id,exercise_id:+f.exercise_id,max_attempts:+f.max_attempts});await refresh();msg('Ejercicio asignado.');});});
 $('#refreshReports').addEventListener('click',()=>invoke(async()=>{await refreshReport();msg('Calificaciones actualizadas.');}));
 $('#reportGroup').addEventListener('change',()=>invoke(refreshReport));
-$('#submissionId').addEventListener('change',updateCriteria);
-$('#gradeForm').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{const f=formData(e.currentTarget);await api('grade',{submission_id:+f.submission_id,grades:[{criterion_code:f.criterion_code,instrument:f.instrument,score:+f.score}]});await refreshReport();msg('Calificación guardada por el profesorado.');});});
+$('#submissionId').addEventListener('change',()=>{
+ updateCriteria();
+ updateGradeHistory().catch(e=>msg(e.message,true));
+});
+async function updateGradeHistory(){
+  const id=+$('#submissionId').value;if(!id){$('#gradeHistory').textContent='Sin entrega seleccionada';return;}
+  const history=(await api('grade_history',null,{submission_id:id})).items;
+  $('#gradeHistory').innerHTML=history.length?'<table><thead><tr><th>Fecha</th><th>CE</th><th>Instrumento</th><th>Anterior</th><th>Nueva</th><th>Profesor</th></tr></thead><tbody>'+
+    history.map(h=>'<tr><td>'+esc(h.created_at)+'</td><td>'+esc(h.criterion_code)+'</td><td>'+esc(h.instrument)+'</td><td>'+esc(h.previous_score??'—')+'</td><td>'+esc(h.new_score)+'</td><td>'+esc(h.teacher_name)+'</td></tr>').join('')+'</tbody></table>':'Sin cambios de notas.';
+}
+$('#refreshGradeHistory').addEventListener('click',()=>invoke(updateGradeHistory));
+$('#gradingPolicyForm').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{
+  const f=formData(e.currentTarget);
+  const total=Number(f.portafolio)+Number(f.prueba);
+  if(Math.abs(total-100)>0.0001)throw Error('La suma de porcentajes debe ser 100 %.');
+  await api('grading_policy',{module_code:f.module_code,weights:{portafolio:Number(f.portafolio)/100,prueba:Number(f.prueba)/100}});
+  await refreshReport();msg('Ponderación de módulo actualizada.');
+});});
+$('#gradeForm').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{const f=formData(e.currentTarget);await api('grade',{submission_id:+f.submission_id,grades:[{criterion_code:f.criterion_code,instrument:f.instrument,score:+f.score}]});await refreshReport();await updateGradeHistory();msg('Calificación guardada con historial de auditoría.');});});
 window.CONTA_DASHBOARD_REFRESH=refresh;
 $('#exportReport').addEventListener('click',()=>{if(!state.report)return;const blob=new Blob([JSON.stringify(state.report,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='CONTA_FP360_informe_grupo.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 })();
