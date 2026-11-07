@@ -113,17 +113,36 @@ $('#submissionId').addEventListener('change',()=>{
  updateGradeHistory().catch(e=>msg(e.message,true));
 });
 async function renderSubmissionEvidence(){
- const sid=+$('#submissionId').value,place=$('#submissionPreview');
- if(!sid){place.textContent='No existen entregas para corregir.';return;}
- const response=await api('submission',null,{id:sid}),work=response.item.work||{};
+ const sid=+($('#submissionId')?.value||0),place=$('#submissionPreview');
+ if(!place)return;
+ if(!sid){place.textContent='Seleccione una entrega para revisar los asientos y las actividades.';return;}
+ place.textContent='Recuperando evidencias del servidor…';
+ const response=await api('submission',null,{id:sid});
+ if(+($('#submissionId')?.value||0)!==sid)return;
+ const item=response.item||{},work=item.work||{},
+       entries=Array.isArray(work.asientos)?work.asientos:[],
+       answers=work.respuestasActividades && typeof work.respuestasActividades==='object' && !Array.isArray(work.respuestasActividades)?work.respuestasActividades:{};
  const allowed=new Set((state.submissions.find(x=>x.id===sid)?.criteria||[]).map(x=>x.code));
- const ce=Array.isArray(work.resultadoEvidencias?.ce)?work.resultadoEvidencias.ce.filter(x=>allowed.has(x.codigo)):[];
- const count=Array.isArray(work.asientos)?work.asientos.length:0,activities=Object.keys(work.respuestasActividades||{}).length;
- place.innerHTML='<div class="note"><strong>Vista previa de la entrega</strong><p>Asientos: '+count+' · Actividades respondidas: '+activities+
-  '. Las evidencias procedentes del alumno NO constituyen calificaciones validadas.</p></div>'+
-  (ce.length?'<table><thead><tr><th>Criterio</th><th>Evidencias</th><th>Nota orientativa</th></tr></thead><tbody>'+
-   ce.map(x=>'<tr><td>'+esc(x.codigo)+'</td><td>'+esc(x.respondidas??0)+' / '+esc(x.actividades??0)+'</td><td>'+esc(x.nota===null?'Pendiente':x.nota)+' '+(x.revision?'· Revisión docente':'· No verificada')+'</td></tr>').join('')+'</tbody></table>':
-   '<p class="note">La entrega no incluye desglose de evidencias por criterio.</p>');
+ const ce=Array.isArray(work.resultadoEvidencias?.ce)?
+    work.resultadoEvidencias.ce.filter(x=>allowed.has(x.codigo)):[];
+ const preview=(value)=>esc(JSON.stringify(value,null,2).slice(0,55000));
+ place.innerHTML='<h3>Revisión de evidencias y trabajo contable</h3>'+
+  '<p class="note">Entrega '+esc(sid)+' · Intento '+esc(item.attempt??'—')+' · '+esc(item.received_at||'Sin fecha')+
+  '. Los resultados comunicados por Aula son orientativos y no sustituyen la validación docente.</p>'+
+  '<div class="buttons"><button type="button" id="downloadSubmissionJson">Descargar entrega íntegra en JSON</button></div>'+
+  (ce.length?'<table><thead><tr><th>CE</th><th>Evidencias</th><th>Evaluación orientativa</th></tr></thead><tbody>'+
+    ce.map(x=>'<tr><td>'+esc(x.codigo)+'</td><td>'+esc(x.respondidas??0)+' / '+esc(x.actividades??0)+'</td><td>'+
+    esc(x.nota===null?'Pendiente':x.nota)+(x.revision?' · Revisión docente':' · No validada')+'</td></tr>').join('')+'</tbody></table>':'')+
+  '<details><summary>Libro diario ('+entries.length+' asientos)</summary><pre class="submission-json">'+preview(entries)+'</pre></details>'+
+  '<details><summary>Respuestas de las actividades ('+Object.keys(answers).length+')</summary><pre class="submission-json">'+preview(answers)+'</pre></details>'+
+  '<details><summary>Evaluación provisional y datos de entrega</summary><pre class="submission-json">'+
+    preview({evaluacionProvisional:work.evaluacionProvisional||null,fechaPreparacion:work.fechaPreparacion||null})+'</pre></details>';
+ $('#downloadSubmissionJson').addEventListener('click',()=>{
+    const data=new Blob([JSON.stringify(item,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(data),a=document.createElement('a');
+    a.href=url;a.download='CONTA_FP360_entrega_'+sid+'.json';a.click();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+ });
 }
 async function updateGradeHistory(){
   const id=+$('#submissionId').value;if(!id){$('#gradeHistory').textContent='Sin entrega seleccionada';return;}
