@@ -107,13 +107,22 @@ with sync_playwright() as playwright:
                 }""",timeout=15000)
                 page.wait_for_function("Boolean(window.__fake.objects.get('central_profile_1_31_active_assignment'))")
                 # Reemplazar el ZIP activo no debe borrar otros ejercicios guardados.
+                page.wait_for_function("document.querySelector('#central-status')?.textContent.includes('ZIP guardado')")
                 for assignment_id,exercise_id in ((82,'TEST_B'),(83,'TEST_C')):
                     page.locator('#central-assignment').select_option(str(assignment_id))
+                    page.evaluate("document.querySelector('#central-status').textContent='Esperando nueva descarga'")
                     page.locator('button[data-central="download"]').click()
-                    page.wait_for_function("""id=>{
-                       const data=window.__fake.objects.get('package');
-                       return data && JSON.parse(data).manifest.id===id;
-                    }""",arg=exercise_id)
+                    try:
+                        page.wait_for_function("document.querySelector('#central-status')?.textContent.includes('ZIP guardado')",timeout=12000)
+                        page.wait_for_function("""id=>{
+                           const data=window.__fake.objects.get('package');
+                           return data && JSON.parse(data).manifest.id===id;
+                        }""",arg=exercise_id,timeout=12000)
+                    except Exception as err:
+                        print('DIAGNOSTICO descarga:',page.locator('#central-status').inner_text(),
+                          'paquete:',page.evaluate("JSON.parse(window.__fake.objects.get('package')||'{}').manifest?.id"),
+                          'error JS:',errors[:8])
+                        raise err
                 cache=json.loads(page.evaluate("window.__fake.objects.get('central_profile_1_31_packages')"))
                 assert len(cache)==3,cache
                 # Interrumpir la red y reabrir el primero desde el ZIP SQLite.
