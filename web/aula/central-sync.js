@@ -109,7 +109,17 @@ async function send(){
 async function receive(){
  if(!user)throw Error('Acceda con su cuenta');
  if(studio){groups=(await api('groups')).items;library=(await api('library')).items;await save('groups',groups);await save('library',library);}
- else{assignments=(await api('pull')).items;await save('assignments',assignments);}
+ else{
+   assignments=(await api('pull')).items;
+   const attempts=await load('attempts')||{};
+   for(const assignment of assignments){
+     const id=assignment.assignment_id;
+     if(Number.isSafeInteger(Number(assignment.used_attempts)) && Number(assignment.used_attempts)>=0)
+       attempts[id]=Math.max(Number(attempts[id]||0),Number(assignment.used_attempts));
+   }
+   await save('attempts',attempts);
+   await save('assignments',assignments);
+ }
  render();status('Asignaciones y biblioteca actualizadas');
 }
 async function publish(){
