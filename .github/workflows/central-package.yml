@@ -1,0 +1,36 @@
+name: CONTA FP360 Central - ZIP cPanel conta.redfp360.net
+
+on:
+  push:
+    branches: [feature/auditoria-integral-2026-11]
+    paths:
+      - 'central/cpanel/**'
+      - 'scripts/build_cpanel_bundle.py'
+      - '.github/workflows/central-package.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bundle:
+    name: Generar ZIP de instalación para cPanel
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código del repositorio
+        uses: actions/checkout@v4
+      - name: Instalar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Empaquetar Central sin secretos
+        run: python scripts/build_cpanel_bundle.py
+      - name: Publicar ZIP y hash SHA256
+        uses: actions/upload-artifact@v4
+        with:
+          name: CONTA-FP360-Central-conta.redfp360.net
+          path: |
+            dist/CONTA_FP360_Central_conta.redfp360.net.zip
+            dist/CONTA_FP360_Central_conta.redfp360.net_SHA256.txt
+          if-no-files-found: error
+          retention-days: 30
