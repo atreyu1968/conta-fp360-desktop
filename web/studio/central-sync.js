@@ -1,0 +1,141 @@
+/* CONTA FP360 Central · puente offline-first, sin dependencia de red para contabilidad. */
+(function(){
+'use strict';
+const d=window.CONTA_DESKTOP;
+if(!d?.dbGet||!d?.dbSet)return;
+const studio=location.pathname.includes('/studio/');
+const $=s=>document.querySelector(s);
+const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let token=null,user=null,server=localStorage.getItem('cfp360_central_url')||'';
+let groups=[],library=[],assignments=[],report=null,busy=false;
+d.ready.then(()=>{server=localStorage.getItem('cfp360_central_url')||server;}).catch(console.warn);
+const load=k=>d.dbGet('central_'+k),save=(k,v)=>d.dbSet('central_'+k,v);
+function baseUrl(){
+ const u=new URL(server.trim());
+ if(u.protocol!=='https:'&&!(u.protocol==='http:'&&['localhost','127.0.0.1'].includes(u.hostname)))throw Error('Se exige servidor HTTPS');
+ if(u.username||u.password||u.hash||u.search)throw Error('URL cPanel incorrecta');
+ return u.href.replace(/\/+$/,'');
+}
+async function api(route,data=null,query={}){
+ if(route!=='login'&&route!=='health'&&!token)throw Error('Conéctese con su cuenta para sincronizar');
+ const url=baseUrl()+'/api.php?'+new URLSearchParams({r:route,...query});
+ const headers={};if(token)headers.Authorization='Bearer '+token;
+ if(data!==null)headers['Content-Type']='application/json';
+ const response=await fetch(url,{method:data===null?'GET':'POST',headers,body:data===null?undefined:JSON.stringify(data),cache:'no-store'});
+ if(route==='package'){if(!response.ok)throw Error('Paquete no disponible: '+response.status);return response.blob();}
+ const result=await response.json();if(!response.ok||!result.ok)throw Error(result.error||'Error HTTP '+response.status);
+ return result;
+}
+function status(txt,error=false){const n=$('#central-status');if(n){n.textContent=txt;n.style.color=error?'#ac2828':'#244c6b';}}
+function button(name,label){return '<button type="button" data-central="'+name+'">'+label+'</button>';}
+function choices(data,id,name){return data.map(x=>'<option value="'+escape(x[id])+'">'+escape(x[name])+'</option>').join('');}
+function render(){
+ const box=$('#central-modal');if(!box)return;
+ const auth=user?'<p>'+escape(user.name)+' · '+escape(user.role)+'</p>'+button('logout','Cerrar sesión'):('<label>Correo<input id="central-email" type="email"></label><label>Contraseña<input id="central-password" type="password"></label>'+button('login','Iniciar sesión'));
+ const tools=studio?'<h3>Studio: biblioteca y grupos</h3><p>Genere primero el ZIP de alumnado desde Publicar paquete.</p><label>ZIP de alumnado<input id="central-zip" type="file" accept=".zip"></label><label>Revisión<input id="central-revision" type="number" min="1" value="1"></label>'+button('publish','Guardar publicación offline')+'<label>Grupo<select id="central-group">'+choices(groups,'id','name')+'</select></label><label>Ejercicio<select id="central-exercise">'+choices(library,'id','title')+'</select></label>'+button('assign','Asignar ahora')+button('report','Recibir calificaciones RA y CE')+'<div id="central-report"></div>'
+ :'<h3>Aula: ejercicios y entregas</h3><label>Ejercicios asignados<select id="central-assignment">'+choices(assignments,'assignment_id','title')+'</select></label>'+button('download','Descargar y abrir')+button('prepare','Preparar entrega offline')+'<p>Sin Internet, los asientos y respuestas permanecen en SQLite local.</p>';
+ box.innerHTML='<div class="central-dialog"><div class="central-head"><h2>CONTA FP360 · Central</h2>'+button('close','✕')+'</div><label>Dirección HTTPS de cPanel<input id="central-server" type="url" value="'+escape(server)+'" placeholder="https://dominio.es/conta-fp360"></label>'+auth+'<hr>'+tools+'<hr>'+button('receive','Recibir')+button('send','Enviar pendientes')+button('update','Comprobar GitHub')+'<p id="central-status" role="status">Trabajo local disponible sin conexión.</p></div>';
+}
+function showReport(report){
+ const slot=$('#central-report');if(!slot||!report)return;
+ const lines=report.students.flatMap(s=>s.assignments.map(a=>'<tr><td>'+escape(s.name)+'</td><td>'+escape(a.title)+'</td><td>'+escape(Object.entries(a.criteria).map(([k,v])=>k+': '+(v.final??'pendiente')).join('; '))+'</td></tr>'));
+ slot.innerHTML='<div style="max-height:230px;overflow:auto"><table style="font-size:11px"><thead><tr><th>Alumno</th><th>Ejercicio</th><th>CE</th></tr></thead>'+lines.join('')+'</table></div>'+button('export','Exportar informe JSON');
+}
+async function queue(action,payload){
+ const items=await load('queue')||[];items.push({id:crypto.randomUUID(),action,payload});
+ await save('queue',items);status('Operación guardada sin conexión. Pendientes: '+items.length);
+}
+async function send(){
+ if(!user)throw Error('Acceda con su cuenta');
+ const items=await load('queue')||[];const pending=[];let sent=0;
+ for(const it of items){try{
+  if(it.action==='publish'&&!['teacher','admin'].includes(user.role))throw Error('Cuenta docente necesaria');
+  if(it.action==='submit'&&user.role!=='student')throw Error('Cuenta de alumno necesaria');
+  await api(it.action==='publish'?'library':'submit',it.payload);sent++;
+ }catch(err){pending.push(it);console.warn('Pendiente:',err.message);}}
+ await save('queue',pending);status('Enviadas: '+sent+'. Pendientes: '+pending.length);
+}
+async function receive(){
+ if(!user)throw Error('Acceda con su cuenta');
+ if(studio){groups=(await api('groups')).items;library=(await api('library')).items;await save('groups',groups);await save('library',library);}
+ else{assignments=(await api('pull')).items;await save('assignments',assignments);}
+ render();status('Asignaciones y biblioteca actualizadas');
+}
+async function publish(){
+ const project=window.CONTA_FP360_STUDIO_STATE?.();
+ if(!project?.id)throw Error('No existe supuesto activo');
+ const file=$('#central-zip')?.files?.[0];if(!file)throw Error('Seleccione el ZIP para alumnado');
+ if(file.size>25*1024*1024)throw Error('ZIP mayor de 25 MB');
+ const bytes=new Uint8Array(await file.arrayBuffer());let str='';
+ for(let i=0;i<bytes.length;i+=8192)str+=String.fromCharCode(...bytes.subarray(i,i+8192));
+ const criteria=[...new Set((project.operaciones||[]).flatMap(x=>x.criteriosTrabajados||[]))].filter(x=>/^RA\d+\.[a-z]$/.test(x)).map(code=>({code,ra:code.split('.')[0]}));
+ await queue('publish',{external_id:project.id,title:project.titulo||project.id,module_code:String(project.curriculo?.modulo?.codigo||'SIN-MODULO'),curriculum:project.curriculo?.fuenteEstatal?.url||'',revision:+$('#central-revision').value,criteria,zip_base64:btoa(str)});
+}
+async function download(){
+ if(!user||user.role!=='student')throw Error('Acceda como alumno');
+ const a=assignments.find(x=>+x.assignment_id===+$('#central-assignment').value);if(!a)throw Error('Sin asignación');
+ const blob=await api('package',null,{id:a.exercise_id});
+ const input=$('#importStudent');if(!input)throw Error('No está disponible la importación de Aula');
+ const dt=new DataTransfer();dt.items.add(new File([blob],a.external_id+'.zip',{type:'application/zip'}));input.files=dt.files;
+ await save('active_assignment',a);
+ input.dispatchEvent(new Event('change',{bubbles:true}));
+ status('Paquete descargado. Continúe trabajando offline.');
+}
+async function prepare(){
+ const a=await load('active_assignment');if(!a)throw Error('Descargue una asignación antes de entregarla');
+ const pkg=await d.dbGet('package');const id=pkg?.manifest?.id;
+ if(id!==a.external_id)throw Error('El supuesto activo no corresponde a la asignación');
+ const parse=k=>{try{return JSON.parse(localStorage.getItem(k)||'null');}catch(e){return null;}};
+ const journal=parse('cfp360_journal_'+id)||{},activities=parse('cfp360_actividades_'+id)||{};
+ if(!Array.isArray(journal.asientos)&&!Object.keys(activities).length)throw Error('No hay trabajo para entregar');
+ const attempts=await load('attempts')||{},attempt=Number(attempts[a.assignment_id]||0)+1;
+ if(attempt>Number(a.max_attempts||3))throw Error('Límite de intentos agotado');
+ attempts[a.assignment_id]=attempt;await save('attempts',attempts);
+ await queue('submit',{assignment_id:+a.assignment_id,attempt,event_id:crypto.randomUUID(),work:{manifest_id:id,asientos:journal.asientos||[],cuentas:journal.cuentas||{},cuentasTerceros:journal.cuentasTerceros||{},respuestasActividades:activities,evaluacionProvisional:parse('cfp360_evaluacion_'+id),fechaPreparacion:new Date().toISOString()}});
+}
+async function update(){
+ await d.flush?.();
+ const v=await window.__TAURI__.core.invoke('cfp_check_update');
+ if(!v.enabled){status('Actualizador pendiente de firma y publicación en GitHub');return;}
+ if(!v.available){status('No hay versión nueva');return;}
+ if(!confirm('Versión '+v.version+' firmada disponible. ¿Instalar?'))return;
+ await d.flush?.();status('Instalando actualización firmada');
+ await window.__TAURI__.core.invoke('cfp_install_update');
+}
+async function act(type){
+ if(type==='close'){$('#central-modal')?.remove();return;}
+ if(type==='logout'){token=null;user=null;render();return;}
+ if(busy)return;busy=true;
+ try{
+  if(type==='login'){const r=await api('login',{email:$('#central-email').value,password:$('#central-password').value});token=r.token;user=r.user;render();status('Sesión iniciada');}
+  if(type==='receive')await receive();
+  if(type==='send')await send();
+  if(type==='publish')await publish();
+  if(type==='download')await download();
+  if(type==='prepare')await prepare();
+  if(type==='assign'){await api('assign',{group_id:+$('#central-group').value,exercise_id:+$('#central-exercise').value,max_attempts:3});status('Ejercicio asignado');}
+  if(type==='report'){report=await api('report',null,{group_id:$('#central-group').value});await save('report',report);showReport(report);}
+  if(type==='export'){const url=URL.createObjectURL(new Blob([JSON.stringify(report,null,2)],{type:'application/json'}));try{await d.saveBlob(url,'CONTA_FP360_RA_CE.json',false);}finally{URL.revokeObjectURL(url);}}
+  if(type==='update')await update();
+ }catch(e){status(e.message||String(e),true);console.error(e);}
+ finally{busy=false;}
+}
+function open(){
+ if($('#central-modal'))return;
+ const area=document.createElement('div');area.id='central-modal';
+ area.addEventListener('click',e=>{const button=e.target.closest('button[data-central]');if(button)act(button.dataset.central);else if(e.target===area)area.remove();});
+ area.addEventListener('change',e=>{if(e.target.id==='central-server'){try{const u=new URL(e.target.value);if(u.protocol!=='https:'&&!['localhost','127.0.0.1'].includes(u.hostname))throw Error('HTTPS obligatorio');server=u.href.replace(/\/+$/,'');localStorage.setItem('cfp360_central_url',server);status('Servidor guardado');}catch(err){status(err.message,true);}}});
+ document.body.appendChild(area);render();
+ const tasks=studio?Promise.all([load('groups'),load('library'),load('report')]):Promise.all([load('assignments')]);
+ tasks.then(values=>{if(studio){groups=values[0]||[];library=values[1]||[];report=values[2]||null;}else assignments=values[0]||[];if($('#central-modal')){render();if(report)showReport(report);}}).catch(console.warn);
+}
+function setup(){
+ const parent=$('.top-actions');if(!parent)return;
+ const b=document.createElement('button');b.className='btn';b.id='cfp-central-button';b.textContent='⇅ CONTA FP360 Central';b.addEventListener('click',open);parent.prepend(b);
+ const style=document.createElement('style');style.textContent='#central-modal{position:fixed;inset:0;z-index:9999;background:#0c213ab9;display:grid;place-items:center;padding:16px}.central-dialog{background:white;border-radius:12px;padding:23px;width:min(680px,100%);max-height:90vh;overflow:auto;color:#21344c;font:14px/1.5 system-ui}.central-head{display:flex;align-items:center;justify-content:space-between}.central-dialog input,.central-dialog select{display:block;width:100%;padding:8px;margin:5px 0 12px;border:1px solid #b9cadb;border-radius:6px}.central-dialog label{display:block;margin:7px 0}.central-dialog button{padding:8px 10px;margin:4px;background:#eaf2ff;border:1px solid #b8cce2;border-radius:7px}.central-dialog table td,.central-dialog table th{padding:4px;border:1px solid #cbd6e5}';document.head.appendChild(style);
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',setup,{once:true});else setup();
+window.addEventListener('load',()=>setTimeout(()=>window.__TAURI__?.core?.invoke('cfp_check_update').then(v=>{if(v?.available){const b=$('#cfp-central-button');if(b)b.textContent='⬆ Actualizar a '+v.version;}}).catch(()=>{}),1500));
+window.addEventListener('online',()=>{if(user)send().catch(console.warn);});
+window.CONTA_CENTRAL=Object.freeze({open,send,receive,prepare});
+})();
