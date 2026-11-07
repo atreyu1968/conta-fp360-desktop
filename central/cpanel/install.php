@@ -1,11 +1,12 @@
 <?php
 /**
- * CONTA FP360 Central — instalador asistido, edición 2.4.
+ * CONTA FP360 Central — instalador asistido, edición 2.5.
  *
- * No exige config.php preexistente. Obtiene una autorización de instalación
- * almacenada fuera de la web, detecta el directorio privado de cPanel,
- * comprueba extensiones y repara una ruta de datos inválida sin sobrescribir
- * bases de datos existentes. No publica claves por HTTP.
+ * No exige config.php ni clave de instalación preexistente.
+ * Detecta el directorio privado de cPanel, comprueba extensiones y repara
+ * rutas inválidas sin sobrescribir datos. IMPORTANTE: proteger install.php
+ * desde cPanel mientras se prepara el sitio, porque el primer visitante
+ * podría registrar la cuenta administradora.
  */
 declare(strict_types=1);
 require __DIR__.'/bootstrap.php';
@@ -49,25 +50,6 @@ function setup_private(string $home): string {
     }
     @chmod($path,0700);
     return $path;
-}
-function setup_key(string $private): string {
-    $file=$private.'/instalacion.clave';
-    if (is_link($file)) throw new RuntimeException('Archivo de autorización inseguro.');
-    if (!is_file($file)) {
-        $handle=@fopen($file,'x');
-        if ($handle===false && !is_file($file)) throw new RuntimeException('No puedo crear la clave privada de autorización.');
-        if ($handle!==false) {
-            $key=bin2hex(random_bytes(32));
-            if (fwrite($handle,$key."\n")!==strlen($key)+1) {
-                fclose($handle);@unlink($file);
-                throw new RuntimeException('No se pudo escribir la clave privada.');
-            }
-            fclose($handle);@chmod($file,0600);
-        }
-    }
-    $key=@file_get_contents($file);
-    if (!is_string($key) || strlen(trim($key))<32) throw new RuntimeException('La clave de instalación está vacía o incompleta.');
-    return trim($key);
 }
 function setup_existing(): ?array {
     $file=__DIR__.'/config.php';
@@ -173,7 +155,6 @@ try {
     $site=setup_site_url(); // Exigir HTTPS ANTES de recibir contraseñas.
     $home=setup_home();
     $private=setup_private($home);
-    $authKey=setup_key($private);
     $existing=setup_existing();
     $installed=setup_installed($existing);
     if ($installed) {
@@ -183,11 +164,6 @@ try {
         $checks=setup_requirements($private);
         $legacy=$existing!==null;
         if ($_SERVER['REQUEST_METHOD']==='POST') {
-            $submitted=(string)($_POST['secret']??'');
-            $legacySecret=is_string($existing['install_secret']??null) ? $existing['install_secret'] : '';
-            $authorized=(strlen($submitted)>=24 && hash_equals($authKey,$submitted))
-                || (strlen($legacySecret)>=24 && !str_starts_with($legacySecret,'REEMPLAZAR') && hash_equals($legacySecret,$submitted));
-            if (!$authorized) throw new RuntimeException('Clave de autorización incorrecta. Abra .conta-fp360/instalacion.clave desde el administrador de archivos de cPanel.');
             $invalid=array_keys(array_filter($checks,static fn($ok)=>!$ok));
             if ($invalid) throw new RuntimeException('Faltan requisitos del alojamiento: '.implode(', ',$invalid).'.');
             $school=trim((string)($_POST['school']??''));
@@ -234,8 +210,8 @@ try {
                 @unlink($probe.'-shm');
             }
             $config=$existing??[];
-            $config['install_secret']=(is_string($existing['install_secret']??null) && strlen($existing['install_secret'])>=24 && !str_starts_with($existing['install_secret'],'REEMPLAZAR'))
-                ?$existing['install_secret']:bin2hex(random_bytes(32));
+            // Ya no se necesita una clave de instalación para nuevas instalaciones.
+            unset($config['install_secret']);
             $config['base_url']=$site;
             $config['db_path']=$dbPath;
             $config['upload_dir']=$uploadDir;
@@ -269,6 +245,7 @@ try {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 throw $e;
             }
+            // Limpiar archivo sobrante del instalador anterior, si existiera.
             @unlink($private.'/instalacion.clave');
             $complete=true;
             $message='Servidor instalado correctamente. La configuración y SQLite ya están creadas en las carpetas adecuadas.';
@@ -311,16 +288,15 @@ code{background:#eaf0f8;padding:2px 5px;border-radius:4px;overflow-wrap:anywhere
 <p class="muted">La carpeta privada se crea en tu cuenta de alojamiento, fuera de la web. No es necesario escribir rutas absolutas.</p>
 </div>
 <div class="card">
-<h2>Autorizar e instalar</h2>
-<p>En cPanel → Administrador de archivos, abre tu carpeta personal, activa «Mostrar archivos ocultos» y busca <code>.conta-fp360/instalacion.clave</code>. Copia su contenido en el primer campo. <strong>El código no se muestra por Internet</strong>, para impedir que otro visitante tome el control del servidor.</p>
+<h2>Instalar Central</h2>
+<div class="error"><strong>Acceso inicial:</strong> este formulario no requiere clave de instalación. Antes de publicar el sitio, protege temporalmente el directorio desde «Privacidad de directorios» de cPanel; de lo contrario, cualquier visitante podría registrar la primera cuenta administradora. Elimina <code>install.php</code inmediatamente después de completar el proceso.</div>
 <?php if ($legacy): ?><p class="muted">Existe un <code>config.php</code> anterior. Si su ruta SQLite es incorrecta, el asistente la corregirá con una copia privada de seguridad, siempre que no haya datos existentes que deban conservarse.</p><?php endif; ?>
 <form method="post" action="install.php" autocomplete="off">
-<label for="secret">Clave de autorización de cPanel<input id="secret" type="password" name="secret" required minlength="24" autocomplete="off"></label>
 <label for="school">Nombre del centro educativo<input id="school" name="school" required minlength="3" maxlength="200" value="<?=setup_h((string)($_POST['school']??''))?>"></label>
 <label for="name">Nombre del administrador<input id="name" name="name" required minlength="3" maxlength="200" value="<?=setup_h((string)($_POST['name']??''))?>"></label>
 <label for="email">Correo del administrador<input id="email" type="email" name="email" required maxlength="240" value="<?=setup_h((string)($_POST['email']??''))?>"></label>
 <label for="password">Contraseña del administrador (12 caracteres o más)<input id="password" type="password" name="password" required minlength="12" autocomplete="new-password"></label>
-<button type="submit">Comprobar requisitos e instalar Central</button>
+<button type="submit">Instalar Central</button>
 </form></div>
 <?php endif; ?>
 <footer><p class="muted">CONTA FP360 · Servidor educativo. No cargues datos reales hasta verificar accesos, copias de seguridad y protección de datos.</p></footer>
