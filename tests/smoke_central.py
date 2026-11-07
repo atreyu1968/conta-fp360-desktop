@@ -36,7 +36,10 @@ def pack(eid):
        'operaciones':[],'empresa':{'nombre':'Prueba sin conexión'},
        'curriculo':{'modulo':{'codigo':'0441'}}}
     with zipfile.ZipFile(s,'w',zipfile.ZIP_STORED) as f:
-        f.writestr('manifest.json',json.dumps(m))
+        # ZIP reproducible: su timestamp no puede cambiar el SHA-256 entre pull y descarga.
+        info=zipfile.ZipInfo('manifest.json',(2026,1,1,0,0,0))
+        info.compress_type=zipfile.ZIP_STORED
+        f.writestr(info,json.dumps(m,sort_keys=True))
     return s.getvalue()
 
 class Quiet(SimpleHTTPRequestHandler):
