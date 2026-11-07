@@ -1,0 +1,152 @@
+name: CONTA FP360 - publicar versiones firmadas y actualizables
+on:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+concurrency:
+  group: conta-release-${{ github.ref_name }}
+  cancel-in-progress: false
+jobs:
+  build:
+    name: Firma ${{ matrix.edicion }} ${{ matrix.target }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {edicion: Studio, os: windows-2022, target: windows-x86_64, bundles: nsis}
+          - {edicion: Aula, os: windows-2022, target: windows-x86_64, bundles: nsis}
+          - {edicion: Studio, os: ubuntu-22.04, target: linux-x86_64, bundles: appimage}
+          - {edicion: Aula, os: ubuntu-22.04, target: linux-x86_64, bundles: appimage}
+          - {edicion: Studio, os: macos-15, target: darwin-aarch64, bundles: app}
+          - {edicion: Aula, os: macos-15, target: darwin-aarch64, bundles: app}
+          - {edicion: Studio, os: macos-15, target: darwin-x86_64, bundles: app}
+          - {edicion: Aula, os: macos-15, target: darwin-x86_64, bundles: app}
+    env:
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+      CONTA_FP360_UPDATER_PUBKEY: ${{ vars.CONTA_FP360_UPDATER_PUBKEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verificar las claves de firma
+        shell: bash
+        run: |
+          if [[ -z "$TAURI_SIGNING_PRIVATE_KEY" || -z "$CONTA_FP360_UPDATER_PUBKEY" ]]; then
+            echo 'No se permite publicar actualizaciones sin firma y clave pública.' >&2
+            exit 1
+          fi
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'src-tauri -> target'
+          key: release-${{ matrix.edicion }}-${{ matrix.target }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Evitar publicar etiqueta y binario con versiones distintas
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python - <<'PY'
+          import json,os,tomllib
+          from pathlib import Path
+          config=json.loads(Path('src-tauri/tauri.conf.json').read_text())
+          cargo=tomllib.loads(Path('src-tauri/Cargo.toml').read_text())
+          version=config['version']
+          if cargo['package']['version']!=version or os.environ['RELEASE_TAG']!='v'+version:
+              raise SystemExit('Se requiere v'+version+' y version de Cargo coincidente; etiqueta '+os.environ['RELEASE_TAG'])
+          print('Version de publicacion verificada:',version)
+          PY
+      - name: Dependencias Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev libfuse2 pkg-config patchelf
+      - name: Preparar iconos y configuración firmada
+        shell: bash
+        run: |
+          python -m pip install --quiet pillow
+          python scripts/fix_icons.py
+          python scripts/make_release_config.py '${{ matrix.edicion }}'
+      - name: Configurar arquitecturas macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          if [ '${{ matrix.target }}' = 'darwin-aarch64' ]; then
+            rustup target add aarch64-apple-darwin
+          else
+            rustup target add x86_64-apple-darwin
+          fi
+      - name: Instalar CLI
+        shell: bash
+        run: npm install -g '@tauri-apps/cli@2'
+      - name: Compilar y firmar
+        working-directory: src-tauri
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ '${{ runner.os }}' = 'macOS' ]; then
+            if [ '${{ matrix.target }}' = 'darwin-aarch64' ]; then TARGET=aarch64-apple-darwin; else TARGET=x86_64-apple-darwin; fi
+            tauri build --config tauri.release.generated.conf.json --target "$TARGET" --bundles app
+          else
+            tauri build --config tauri.release.generated.conf.json --bundles '${{ matrix.bundles }}'
+          fi
+      - name: Preparar artefacto y firma
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p 'upload/${{ matrix.edicion }}'
+          if [ '${{ runner.os }}' = 'Windows' ]; then
+            find src-tauri/target/release/bundle/nsis -maxdepth 1 -type f \( -name '*-setup.exe' -o -name '*-setup.exe.sig' \) -exec cp {} 'upload/${{ matrix.edicion }}/' \;
+          elif [ '${{ runner.os }}' = 'Linux' ]; then
+            find src-tauri/target/release/bundle/appimage -maxdepth 1 -type f \( -name '*.AppImage' -o -name '*.AppImage.sig' \) -exec cp {} 'upload/${{ matrix.edicion }}/' \;
+          else
+            if [ '${{ matrix.target }}' = 'darwin-aarch64' ]; then DIR=src-tauri/target/aarch64-apple-darwin/release/bundle/macos; else DIR=src-tauri/target/x86_64-apple-darwin/release/bundle/macos; fi
+            for f in "$DIR"/*.app.tar.gz; do
+              test -f "$f" || exit 1
+              base=$(basename "$f" .app.tar.gz)
+              dest="upload/${{ matrix.edicion }}/${base}-${{ matrix.target }}.app.tar.gz"
+              cp "$f" "$dest"
+              cp "$f.sig" "$dest.sig"
+            done
+          fi
+          count=$(find 'upload/${{ matrix.edicion }}' -type f | wc -l)
+          test "$count" -eq 2 || { echo "Se esperaba artefacto y firma, encontrados: $count"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-${{ matrix.edicion }}-${{ matrix.target }}
+          path: upload/
+          retention-days: 7
+          if-no-files-found: error
+  publish:
+    name: Publicar GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: signed-*
+          merge-multiple: true
+          path: signed/
+      - name: Verificar firmas y crear manifiestos Studio/Aula
+        run: |
+          python scripts/create_manifest.py signed/ '${{ github.ref_name }}'
+          mkdir -p release-assets
+          find signed -type f -exec cp {} release-assets/ \;
+          test -s release-assets/studio-latest.json
+          test -s release-assets/aula-latest.json
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: release-assets/*

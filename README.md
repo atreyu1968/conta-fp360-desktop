@@ -1,6 +1,6 @@
-# CONTA FP360 Desktop — v2.1
+# CONTA FP360 Desktop — v2.3 (SQLite + Central + Updater)
 
-Dos aplicaciones independientes de contabilidad educativa para Windows 10 y Windows 11 (x64), construidas con **Tauri 2** y las interfaces originales de CONTA FP360 v2.1.
+Dos aplicaciones independientes de contabilidad educativa para Windows 10/11, Linux y macOS (en validación), construidas con **Tauri 2** y las interfaces originales de CONTA FP360 v2.1.
 
 **Autor y titular:** Francisco Javier González Rolo. Reservados todos los derechos. No se concede licencia abierta de reutilización del código (UNLICENSED).
 
@@ -42,18 +42,42 @@ Los instaladores aparecen en src-tauri/target/release/bundle/nsis. Los ejecutabl
 ## Arquitectura y seguridad
 
 - web/studio/index.html y web/aula/index.html conservan los motores HTML/JavaScript de la versión 2.1.
-- web/*/desktop-bridge.js adapta las descargas a un diálogo nativo, abre enlaces externos en el navegador predeterminado y adapta la impresión.
-- src-tauri/src/lib.rs implementa un comando acotado de escritura de archivos solicitado por el usuario, con límite de 200 MB.
+- web/*/desktop-bridge.js adapta las descargas, enlaces, impresión y migración/persistencia SQLite con cola de escrituras.
+- src-tauri/src/lib.rs implementa la exportación nativa con límite de 200 MB; src-tauri/src/storage.rs incorpora SQLite, copias y restauración.
 - src-tauri/tauri.conf.json y tauri.aula.conf.json definen identificadores y perfiles diferentes.
 - No se incorpora un servidor de evaluación remota ni garantía de antifraude. **No distribuir el JSON maestro ni las soluciones docentes al alumnado.**
-- El guardado usa localStorage/IndexedDB del perfil WebView2. Conviene exportar copias de seguridad antes de reinstalar, cambiar de equipo o limpiar datos.
+- **SQLite local incorporado** es el almacenamiento persistente principal. Se migran automáticamente los datos previos de localStorage e IndexedDB y se ofrecen copia y restauración nativas desde el menú lateral. Consulte [SQLITE.md](SQLITE.md) para rutas, seguridad y recuperación.
 
 ## Pruebas
 
-El flujo valida la estructura, comprueba la sintaxis del JavaScript y realiza pruebas de arranque y exportación simulada con Chromium. Estas pruebas **no sustituyen** las pruebas de WebView2 real en Windows: guardado de PDF/ZIP, impresión, reimportación, datos tras reinstalación, ejecución sin conexión y control del acceso a soluciones.
+El flujo valida la estructura, comprueba la sintaxis del JavaScript y realiza pruebas de arranque, migración y comandos SQLite simulados con Chromium. Estas pruebas **no sustituyen** las pruebas de WebView2 real en Windows: guardado de PDF/ZIP, impresión, reimportación, datos tras reinstalación, ejecución sin conexión y control del acceso a soluciones.
 
 Se recomienda efectuar una revisión curricular y fiscal docente de los supuestos antes de utilizarlos con alumnado.
 
 ## Compatibilidad
 
-Windows 10 y 11 x64. No se incluye Moodle LTI ni SCORM en estas dos aplicaciones Desktop.
+Windows 10 y 11 x64; paquetes Linux x64 en Actions. Se ha añadido compilación macOS Intel y Apple Silicon en `.github/workflows/macos.yml`; verificar cada trabajo en Actions antes de distribuir artefactos. La ejecución en equipos macOS puede requerir firma Apple y notarización. No se incluye Moodle LTI ni SCORM en estas dos aplicaciones Desktop.
+
+## CONTA FP360 Central: sincronización sin conexión
+
+- `web/studio/central-sync.js` conecta Studio con la biblioteca del servidor cPanel y guarda publicaciones pendientes en SQLite del profesor.
+- `web/aula/central-sync.js` recupera asignaciones, verifica SHA-256 del ZIP, importa el paquete en SQLite local y conserva las entregas pendientes sin conexión.
+- El perfil local queda ligado al primer usuario autenticado y al servidor HTTPS; **no deben compartir un mismo perfil de sistema operativo varios alumnos**. Para aulas compartidas, crear cuentas individuales del sistema o implementar aislamiento multiusuario antes de implantación.
+- Las colas privadas se almacenan en SQLite bajo el identificador del usuario; la sesión autenticada solo se conserva en memoria y se renueva cuando vuelve la conexión.
+- El servidor cPanel PHP/SQLite es una pieza **separada**, distribuida en el paquete `CONTA_FP360_CENTRAL_CPanel_PHP_SQLite.zip`. Es necesario instalarlo, habilitar `pdo_sqlite` y `ZipArchive`, configurar HTTPS y revisar permisos y protección de datos.
+- La importación de biblioteca y las asignaciones no son necesarias para trabajar con un ejercicio previamente descargado. Las entregas se pueden preparar offline y sincronizar tras autenticación cuando exista Internet.
+- Las calificaciones calculadas en Aula son provisionales; las calificaciones curriculares definitivas se validan desde el panel central por un profesor autorizado.
+
+## Actualizaciones GitHub Releases (firmas independientes)
+
+- `src-tauri/src/updater.rs` comprueba las versiones de Studio y Aula por separado mediante el plugin oficial Tauri 2.
+- `.github/workflows/release.yml` construye instaladores y manifiestos de actualización con firma criptográfica al publicar una etiqueta `vX.Y.Z`.
+- **Para activar la función**: generar la pareja de claves de firma de Tauri (`tauri signer generate`), guardar la privada y su contraseña en los secretos `TAURI_SIGNING_PRIVATE_KEY` y `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`, y la clave pública en la variable de Actions `CONTA_FP360_UPDATER_PUBKEY`. No publicar nunca la clave privada.
+- El compilador incorpora la clave pública mediante variable de entorno; hasta configurarla, el comprobador anuncia que las actualizaciones firmadas no están activadas.
+- En macOS, la firma del actualizador Tauri no sustituye la firma de código y notarización de Apple. En Windows, el certificado Authenticode es independiente de la pareja de firma Tauri; su contratación continúa pendiente.
+- El actualizador no elimina las bases SQLite de usuario ni debe modificar esquemas sin migraciones. La actualización se confirma desde la interfaz y se sincronizan primero las escrituras locales pendientes.
+
+## Pruebas añadidas en la integración
+
+`tests/smoke_central.py` ejecuta Chromium con una API de prueba e intenta verificar la descarga del ZIP del alumno, la cola de entregas y la publicación offline docente. Este test y los instaladores solo deben considerarse validados cuando GitHub Actions los marque correctamente. No se deben introducir datos reales de alumnado en la demostración.
+
