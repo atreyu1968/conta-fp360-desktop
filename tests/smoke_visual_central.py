@@ -68,6 +68,11 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
                 elif action=='grade_history':
                     result={'ok':True,'items':[{'id':1,'created_at':'2026-11-07','criterion_code':'RA4.a','instrument':'portafolio',
                         'previous_score':None,'new_score':7.25,'teacher_name':'Docente de prueba'}]}
+                elif action=='submission':
+                    result={'ok':True,'item':{'id':9,'attempt':1,'received_at':'2026-11-07T12:00:00Z',
+                      'work':{'manifest_id':'TEST','asientos':[{'id':'AS-1','lineas':[{'cuenta':'600','debe':50,'haber':0}]}],
+                        'respuestasActividades':{'P1':'<script>window.testInjection=true</script>'},
+                        'evaluacionProvisional':{'RA4.a':7.25}}}}
                 else:result={'ok':True}
                 route.fulfill(status=200,json=result)
             page.route('**/api.php?*',route_api)
@@ -91,6 +96,9 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
                 page.locator('button.side-link[data-view=assessment]').click()
                 page.locator('details:has(#gradingPolicyForm) summary').click()
                 page.locator('#gradingPolicyForm').wait_for(state='visible')
+                page.wait_for_function("document.querySelector('#submissionPreview')?.textContent.includes('Revisión de evidencias')")
+                assert page.locator('#downloadSubmissionJson').count()==1
+                assert not page.evaluate("Boolean(window.testInjection)"),'La entrega ejecutó HTML del alumno'
                 page.locator('#gradingPolicyForm input[name=module_code]').fill('0441')
                 page.locator('#gradingPolicyForm input[name=portafolio]').fill('70')
                 page.locator('#gradingPolicyForm input[name=prueba]').fill('30')
