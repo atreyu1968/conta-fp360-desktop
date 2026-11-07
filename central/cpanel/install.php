@@ -241,7 +241,7 @@ try {
             $config['upload_dir']=$uploadDir;
             $config['token_hours']=(int)($existing['token_hours']??8);
             $config['platform_owner_email']=$email;
-            $config['require_curriculum_catalog']=(bool)($existing['require_curriculum_catalog']??true);
+            $config['require_curriculum_catalog']=($existing===null) ? true : (bool)($existing['require_curriculum_catalog']??false);
             $config['max_package_bytes']=(int)($existing['max_package_bytes']??25*1024*1024);
             $config['max_submission_bytes']=(int)($existing['max_submission_bytes']??3*1024*1024);
             // Crea o repara automáticamente config.php; conserva copia privada del anterior.
