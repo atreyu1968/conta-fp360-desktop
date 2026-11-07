@@ -48,10 +48,12 @@ def json_request(base, route, body=None, token=None, params=None, expected=200):
     ok(data.get('ok') == (code < 400), f"{route}: respuesta incoherente {data}")
     return data
 
-def makezip(external_id, unsafe=False):
+def makezip(external_id, unsafe=False, criteria=None):
     stream = io.BytesIO()
+    manifest={'schemaId': 'contafp360.alumno.v1', 'id': external_id, 'documentos': []}
+    if criteria is not None: manifest['evaluacionCurricular']={'criterios':criteria}
     with zipfile.ZipFile(stream, 'w', compression=zipfile.ZIP_DEFLATED) as z:
-        z.writestr('manifest.json', json.dumps({'schemaId': 'contafp360.alumno.v1', 'id': external_id, 'documentos': []}))
+        z.writestr('manifest.json', json.dumps(manifest))
         if unsafe: z.writestr('soluciones/instructor.txt', 'NO DEBERIA EXISTIR')
     return base64.b64encode(stream.getvalue()).decode()
 
@@ -105,6 +107,9 @@ def test_http():
             ok(retransmit['exercise_id']==exercise and retransmit['already_received'] is True,'Publicación no idempotente')
             json_request(base,'library',{**publication,'title':'Título modificado'},t,expected=409)
             json_request(base,'library',{'title':'X','external_id':'BAD-SOL','module_code':'0441','criteria':[],'zip_base64':makezip('BAD-SOL',True)},t,expected=422)
+            # No admitir discrepancias entre CE publicados y los del manifiesto.
+            json_request(base,'library',{**publication,'external_id':'BAD-CE-MISMATCH','zip_base64':makezip('BAD-CE-MISMATCH',criteria=['RA4.a'])},t,expected=422)
+            json_request(base,'library',{**publication,'external_id':'VALID-CE-MATCH','zip_base64':makezip('VALID-CE-MATCH',criteria=['RA4.a','RA4.b'])},t,expected=201)
             assignment={'group_id':group,'exercise_id':exercise,'max_attempts':3,'due_at':'2020-01-01T00:00:00Z'}
             aid=json_request(base,'assign',assignment,t,expected=201)['assignment_id']
             redelivery=json_request(base,'assign',assignment,t)
