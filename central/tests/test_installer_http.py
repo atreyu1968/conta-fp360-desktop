@@ -52,20 +52,15 @@ def run_case(repair: bool):
                     time.sleep(.1)
             else: raise AssertionError('El servidor PHP no ha arrancado')
             check(status==200,'El instalador debe abrir el formulario')
-            check('Autorizar e instalar' in body,'El asistente no muestra sus controles')
+            check('Instalar Central' in body,'El asistente no muestra sus controles')
+            check('name="secret"' not in body,'No debe existir un campo de clave de instalación')
+            check('Privacidad de directorios' in body,'Debe advertir del acceso público inicial')
             check('PDO con controlador SQLite' in body,'No realiza comprobaciones de requisitos')
             key_file=home/'.conta-fp360'/'instalacion.clave'
-            check(key_file.is_file(),'La autorización no se crea fuera de la web')
-            token=key_file.read_text().strip()
-            check(len(token)>=32 and token not in body,'La autorización debe permanecer fuera de HTTP')
-            status,body=request(base+'/.conta-fp360/instalacion.clave')
-            check(token not in body,'La clave privada no puede descargarse desde el subdominio')
-            form={'secret':'INVALID-TEST-DO-NOT-AUTHORIZE-0000','school':'Centro piloto de pruebas',
-                  'name':'Admin del centro','email':'admin@example.test','password':'TestPass123456!'}
-            status,body=request(base+'/install.php',form)
-            check('Clave de autorización incorrecta' in body,'La instalación debe rechazar claves incorrectas')
-            check(not (home/'.conta-fp360'/'conta-central.sqlite3').exists(),'No puede inicializar sin autorización')
-            form['secret']=token
+            check(not key_file.exists(),'El instalador no debe generar claves de autorización')
+            check(not (web/'config.php').exists() or repair,'Antes de enviar el formulario no debe haber configuración creada en el caso nuevo')
+            form={'school':'Centro piloto de pruebas','name':'Admin del centro',
+                  'email':'admin@example.test','password':'TestPass123456!'}
             status,body=request(base+'/install.php',form)
             check(status==200, 'La instalación debe responder correctamente')
             check('Servidor instalado correctamente' in body,'No se muestra confirmación de instalación')
@@ -74,7 +69,7 @@ def run_case(repair: bool):
             check(str(home/'.conta-fp360') in config,'No se ha guardado la ruta privada correcta')
             check("admin@example.test" in config,'No se ha asignado correctamente el propietario')
             check((home/'.conta-fp360'/'conta-central.sqlite3').is_file(),'No se ha creado SQLite')
-            check(not key_file.exists(),'La clave de instalación no se ha retirado')
+            check(not key_file.exists(),'No puede quedar una clave de instalación')
             if repair:
                 backups=list((home/'.conta-fp360').glob('config-previa-*.bak'))
                 check(backups,'La configuración antigua se debe respaldar en privado')
@@ -87,6 +82,7 @@ def run_case(repair: bool):
                 check(resp.status==200 and b'"token"' in resp.read(),'El administrador no puede iniciar sesión')
             # El instalador se elimina automáticamente si los permisos lo permiten.
             check(not (web/'install.php').exists(),'El instalador ha quedado expuesto después de instalar')
+            check(request(base+'/install.php',form)[0]==404,'No puede reinstalar una vez completado')
             print('OK:', 'reparación de config.php' if repair else 'config.php creado automáticamente')
         finally:
             proc.terminate()
