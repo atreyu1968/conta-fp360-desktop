@@ -96,7 +96,13 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
                 page.locator('button.side-link[data-view=assessment]').click()
                 page.locator('details:has(#gradingPolicyForm) summary').click()
                 page.locator('#gradingPolicyForm').wait_for(state='visible')
-                page.wait_for_function("document.querySelector('#submissionPreview')?.textContent.includes('Revisión de evidencias')")
+                try:
+                    page.wait_for_function("document.querySelector('#submissionPreview')?.textContent.includes('Revisión de evidencias')",timeout=9000)
+                except Exception:
+                    print('DIAG SUBMISSION: message=',page.locator('#message').inner_text(),
+                        'preview=',page.locator('#submissionPreview').inner_text(),
+                        'requests=',state['requests'][-12:],'errors=',errors)
+                    raise
                 assert page.locator('#downloadSubmissionJson').count()==1
                 assert not page.evaluate("Boolean(window.testInjection)"),'La entrega ejecutó HTML del alumno'
                 page.locator('#gradingPolicyForm input[name=module_code]').fill('0441')
