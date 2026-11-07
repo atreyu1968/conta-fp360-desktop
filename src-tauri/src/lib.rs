@@ -1,3 +1,4 @@
+mod updater;
 mod storage;
 
 use base64::Engine as _;
@@ -64,8 +65,11 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             save_export,
+            updater::cfp_check_update,
+            updater::cfp_install_update,
             storage::sqlite_get,
             storage::sqlite_list,
             storage::sqlite_put,
