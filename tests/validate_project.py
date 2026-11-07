@@ -33,3 +33,13 @@ assert (ROOT/'web/studio/desktop-bridge.js').read_bytes()==(ROOT/'web/aula/deskt
 assert 'save_export' in (ROOT/'src-tauri/src/lib.rs').read_text(encoding='utf-8')
 assert 'CONTA_DESKTOP?.createPrintWindow?.()' in (ROOT/'web/aula/index.html').read_text(encoding='utf-8')
 print('Estructura, aislamiento y recursos locales: OK')
+
+assert 'mod storage;' in (ROOT/'src-tauri/src/lib.rs').read_text(encoding='utf-8')
+assert 'sqlite_restore' in (ROOT/'src-tauri/src/storage.rs').read_text(encoding='utf-8')
+assert 'rusqlite' in (ROOT/'src-tauri/Cargo.toml').read_text(encoding='utf-8')
+for ed in ('studio','aula'):
+ html=(ROOT/'web'/ed/'index.html').read_text(encoding='utf-8')
+ assert 'window.CONTA_DESKTOP?.dbGet' in html
+ assert 'window.CONTA_DESKTOP.ready.then(start)' in html
+ assert 'sqlite_put_many' in (ROOT/'web'/ed/'desktop-bridge.js').read_text(encoding='utf-8')
+print('SQLite nativo, migración, copia y separación: OK')
