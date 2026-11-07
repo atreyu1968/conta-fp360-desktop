@@ -4,18 +4,20 @@
 
 Autor y titular: Francisco Javier González Rolo. Reservados todos los derechos. Proyecto educativo; no constituye software de facturación ni documentación fiscal oficial.
 
-## 1. Instalación en cPanel (PHP 8.2+)
+## 1. Instalación asistida en cPanel (PHP 8.2+)
 
-Requisitos del alojamiento: PHP 8.2 o superior, `PDO`, `pdo_sqlite`, `SQLite3`, `ZipArchive` (`zip`), HTTPS, permisos de escritura para la carpeta privada. Si una extensión no aparece en «Select PHP Version» o «PHP Extensions», deberá habilitarla el proveedor. Para subir paquetes de hasta 25 MB, comprobar `post_max_size` y `memory_limit` (se recomienda `post_max_size` ≥ 40 MB, `memory_limit` ≥ 128 MB). SQLite en hospedaje compartido es apropiado para concurrencia moderada, no para cargas masivas; la estrategia WAL y `busy_timeout` minimiza los bloqueos pero no sustituye pruebas con usuarios reales.
+El **instalador 2.4 crea `config.php` y SQLite automáticamente**, elige una carpeta privada y muestra una comprobación de requisitos. No es necesario editar rutas Linux ni definir manualmente `install_secret`. Requisitos del alojamiento: PHP 8.2+, PDO_SQLITE, SQLite3, ZipArchive, HTTPS y permiso de escritura para la cuenta PHP.
 
-1. Subir el contenido de `cpanel/` a `public_html/conta-fp360/` usando cPanel File Manager (no descomprimir el archivo principal dejando doble directorio).
-2. Renombrar `config.example.php` a `config.php` y editar `base_url` (HTTPS) e `install_secret` con 32 o más caracteres aleatorios. **Jamás subir `config.php` ni contraseñas a GitHub.**
-3. Preferentemente cambiar `db_path` y `upload_dir` para que apunten a carpetas privadas **fuera de `public_html`**. Si quedan bajo `cpanel/private`, asegurarse de que Apache/LiteSpeed respeta `Require all denied` y comprobar mediante URL que la carpeta es inaccesible. Nginx sin `.htaccess` requiere reglas equivalentes del proveedor.
-4. Abrir `https://DOMINIO/conta-fp360/install.php`. Introducir la clave inicial, centro educativo, administrador, correo y contraseña de al menos 12 caracteres.
-5. Cuando confirme la instalación, **eliminar `install.php` del alojamiento**. Acceder al panel `index.php` para crear usuarios, grupos, matrículas y asignaciones.
-6. Configurar copia periódica del archivo SQLite con método seguro y directorio de paquetes, preferentemente con una tarea cron y backups del proveedor; la simple copia de un archivo WAL activo no constituye una copia consistente. Configurar protección de datos, retención, encargos de tratamiento y control de permisos antes de registrar alumnado real.
+1. Crear el subdominio HTTPS, por ejemplo `https://conta.redfp360.net`, con directorio web propio. Extraer **el contenido de** `central/cpanel/` directamente en la raíz del subdominio, incluidos archivos ocultos como `.htaccess`. Deben quedar `install.php`, `index.php`, `api.php`, `bootstrap.php`, `schema.sql` y los recursos `assets/`.
+2. Abrir `https://conta.redfp360.net/install.php`. El instalador localiza el directorio HOME, crea `HOME/.conta-fp360/` fuera del sitio público y genera `instalacion.clave` con un código aleatorio único. **Este código no se muestra en el navegador**: de lo contrario, el primer visitante podría apropiarse del servidor. Para leerlo, entrar en **cPanel → Administrador de archivos → carpeta personal → Mostrar archivos ocultos → `.conta-fp360/instalacion.clave`**.
+3. Copiar el código en «Clave de autorización de cPanel», introducir centro, administrador, correo y contraseña (al menos 12 caracteres), y pulsar «Comprobar requisitos e instalar Central». No compartir la clave ni guardarla en GitHub.
+4. El asistente comprobará versión de PHP, PDO_SQLITE, SQLite3, ZIP y rutas; **creará `config.php` de forma automática**, inicializará SQLite fuera de la web, creará administrador y borrará la clave de autorización. Intentará eliminar `install.php`; **si permanece**, borrarlo desde cPanel. No permite una nueva instalación sobre una base con usuarios.
+5. Si existe `config.php` anterior con rutas de datos inválidas y **no existe** una base SQLite que conservar en esa ruta, el asistente lo corregirá después de autenticar la instalación. La configuración anterior se respalda dentro de la carpeta privada. Si existe una base SQLite que podría contener datos, se bloquea la reparación automática para evitar pérdidas.
+6. Comprobar `https://conta.redfp360.net/api.php?r=health` (valores `ok: true` e `initialized: true`); entrar en `index.php` con la cuenta creada. En Studio y Aula, indicar **solo** `https://conta.redfp360.net` y autenticar cada usuario.
 
-El acceso **no permite registro público**, ni publica contraseñas de ejemplo. La primera configuración está protegida por `install_secret` que el propietario define localmente.
+**Seguridad y límites.** El instalador no expone en HTTP la clave `instalacion.clave`; está en un directorio separado del document root. Las reglas `.htaccess` protegen los archivos de configuración y las copias. El registro de errores recoge los problemas técnicos y la pantalla muestra el requisito que falla. Se recomienda `post_max_size` >= 40 MB y `memory_limit` >= 128 MB para paquetes grandes, copias consistentes de SQLite en modo WAL, permisos privados mínimos, asesoramiento del DPD y prueba piloto con datos ficticios. Los alojamientos con PHP ejecutándose bajo un usuario distinto del de cPanel pueden requerir intervención del proveedor para ajustar permisos, **nunca 777**.
+
+La plantilla `config.example.php` queda únicamente para soporte y migraciones. No enviarla con claves rellenadas a soporte, ni almacenarla en un repositorio público.
 
 ## 2. Uso del servidor
 
