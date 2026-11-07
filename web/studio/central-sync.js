@@ -8,6 +8,12 @@ const $=s=>document.querySelector(s);
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let token=null,user=null,localUser=null,server=localStorage.getItem('cfp360_central_url')||'';
 let groups=[],library=[],assignments=[],report=null,cachedPackages=[],busy=false;
+let queueLock=Promise.resolve(),sending=false;
+function serialQueue(work){
+ const next=queueLock.then(work);
+ queueLock=next.then(()=>{},()=>{});
+ return next;
+}
 const identityReady=d.ready.then(async()=>{
   server=localStorage.getItem('cfp360_central_url')||server;
   localUser=await d.dbGet('central_identity')||null;
@@ -58,22 +64,47 @@ async function queue(action,payload){
  await identityReady;
  if(!localUser)throw Error('Autentique este perfil de ordenador al menos una vez para habilitar entregas offline.');
  if(action==='submit' && localUser.role!=='student')throw Error('El perfil offline no pertenece al alumnado.');
- if(action==='publish' && !['admin','teacher'].includes(localUser.role))throw Error('El perfil offline no pertenece al profesorado.');
- const items=await load('queue')||[];items.push({id:crypto.randomUUID(),owner_id:localUser.id,action,payload});
- await save('queue',items);status('Operación guardada sin conexión. Pendientes: '+items.length);
+ if(['publish','assign'].includes(action) && !['admin','teacher'].includes(localUser.role))throw Error('El perfil offline no pertenece al profesorado.');
+ return serialQueue(async()=>{
+   const items=await load('queue')||[];
+   items.push({id:crypto.randomUUID(),owner_id:localUser.id,action,payload});
+   await save('queue',items);
+   status('Operación guardada sin conexión. Pendientes: '+items.length);
+ });
 }
 async function send(){
- if(!user||!localUser||Number(user.id)!==Number(localUser.id))throw Error('Debe iniciar sesión con el propietario del perfil offline para sincronizar.');
- const items=await load('queue')||[];const pending=[];let sent=0;
- for(const it of items){try{
-  if(it.owner_id!==localUser.id)throw Error('Bloqueado: entrega de otro usuario');
-  if(['publish','assign'].includes(it.action)&&!['teacher','admin'].includes(user.role))throw Error('Cuenta docente necesaria');
-  if(it.action==='submit'&&user.role!=='student')throw Error('Cuenta de alumno necesaria');
-  const route=({publish:'library',assign:'assign',submit:'submit'})[it.action];
-  if(!route)throw Error('Operación de cola no reconocida');
-  await api(route,it.payload);sent++;
- }catch(err){pending.push(it);console.warn('Pendiente:',err.message);}}
- await save('queue',pending);status('Enviadas: '+sent+'. Pendientes: '+pending.length);
+ if(sending)return;
+ if(!user||!localUser||Number(user.id)!==Number(localUser.id))
+   throw Error('Inicie sesión con el propietario del perfil offline para sincronizar.');
+ sending=true;let sent=0,errors=[];
+ try{
+   await queueLock;
+   const snapshot=await load('queue')||[];
+   for(const it of snapshot){
+     try{
+       if(it.owner_id!==localUser.id)throw Error('Entrega de otro usuario bloqueada');
+       if(['publish','assign'].includes(it.action)&&!['teacher','admin'].includes(user.role))
+         throw Error('Cuenta docente necesaria');
+       if(it.action==='submit'&&user.role!=='student')throw Error('Cuenta de alumno necesaria');
+       const route=({publish:'library',assign:'assign',submit:'submit'})[it.action];
+       if(!route)throw Error('Operación de cola desconocida');
+       await api(route,it.payload);
+       await serialQueue(async()=>{
+         const current=await load('queue')||[];
+         await save('queue',current.filter(x=>x.id!==it.id));
+       });
+       sent++;
+     }catch(err){
+       errors.push(String(err.message||err));
+       if(/sesión|credenciales|401|autenticaci[oó]n/i.test(String(err.message||err)))break;
+     }
+   }
+   await queueLock;
+   const pending=(await load('queue')||[]).length;
+   status('Enviadas: '+sent+'. Pendientes: '+pending+
+     (errors.length?' · Último error: '+errors[errors.length-1]:''),
+     errors.length>0);
+ }finally{sending=false;}
 }
 async function receive(){
  if(!user)throw Error('Acceda con su cuenta');
@@ -182,6 +213,7 @@ async function act(type){
    await identityReady;
    const r=await api('login',{email:$('#central-email').value,password:$('#central-password').value});
    if(r.user.must_change_password){token=r.token;user=r.user;render();status('Contraseña temporal: cámbiela para activar el perfil offline.');return;}
+   if(r.user.must_change_password)throw Error('Su contraseña es temporal. Acceda primero a CONTA FP360 Central desde el navegador para establecer una contraseña personal.');
    const next={...r.user,server:baseUrl()};
    if(localUser && (Number(localUser.id)!==Number(next.id)||Number(localUser.school_id)!==Number(next.school_id)||localUser.server!==next.server)){
      throw Error('Este perfil offline contiene trabajos de otro usuario o servidor. Use una cuenta independiente del sistema operativo para proteger los datos del alumnado.');
