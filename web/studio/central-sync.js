@@ -160,7 +160,7 @@ async function prepare(){
  const used=queued.reduce((m,x)=>Math.max(m,Number(x.payload.attempt||0)),Number(attempts[a.assignment_id]||0));
  const attempt=used+1;
  if(attempt>Number(a.max_attempts||3))throw Error('Límite de intentos agotado');
- await queue('submit',{assignment_id:+a.assignment_id,attempt,event_id:crypto.randomUUID(),work:{manifest_id:id,asientos:journal.asientos||[],cuentas:journal.cuentas||{},cuentasTerceros:journal.cuentasTerceros||{},respuestasActividades:activities,evaluacionProvisional:parse('cfp360_evaluacion_'+id),fechaPreparacion:new Date().toISOString()}});
+ await queue('submit',{assignment_id:+a.assignment_id,attempt,event_id:crypto.randomUUID(),work:{manifest_id:id,asientos:journal.asientos||[],cuentas:journal.cuentas||{},cuentasTerceros:journal.cuentasTerceros||{},respuestasActividades:activities,resultadoEvidencias:window.CONTA_FP360_AULA_EVIDENCE?.()||null,evaluacionProvisional:parse('cfp360_evaluacion_'+id),fechaPreparacion:new Date().toISOString()}});
  attempts[a.assignment_id]=attempt;await save('attempts',attempts);
 }
 async function update(){
