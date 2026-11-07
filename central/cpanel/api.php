@@ -118,9 +118,30 @@ try {
    if(!is_file($file) && file_put_contents($file,$binary,LOCK_EX)!==strlen($binary)) fail(500,'No se pudo guardar el paquete');
    $revision=(int)($in['revision']??1);
    if($revision<1 || $revision>100000) fail(422,'Revisión incorrecta');
-   try{$db->prepare('INSERT INTO exercises(school_id,teacher_id,external_id,revision,title,module_code,curriculum,criteria_json,manifest_json,zip_path,sha256) VALUES(?,?,?,?,?,?,?,?,?,?,?)')->execute([$u['school_id'],$u['id'],$external,$revision,$title,$module,$curriculum,json_encode($criteria,JSON_THROW_ON_ERROR),$contents,$file,$hash]);}
-   catch(PDOException $e){fail(409,'La revisión ya existe en la biblioteca. Publique una nueva revisión');}
-   respond(['ok'=>true,'exercise_id'=>(int)$db->lastInsertId(),'sha256'=>$hash],201);
+   // Reintentos idempotentes: si el servidor guardó el ZIP pero se perdió la respuesta,
+   // devolver el identificador existente, nunca bloquear la cola del profesor.
+   $criteriaJson=json_encode($criteria,JSON_THROW_ON_ERROR);
+   $samePublication=static function(?array $existing) use ($u,$hash,$title,$module,$curriculum,$criteriaJson): bool {
+     return $existing!==null && (int)$existing['teacher_id']===(int)$u['id']
+       && hash_equals($existing['sha256'],$hash)
+       && $existing['title']===$title && $existing['module_code']===$module
+       && $existing['curriculum']===$curriculum && $existing['criteria_json']===$criteriaJson;
+   };
+   $existing=fetch_one('SELECT id,teacher_id,sha256,title,module_code,curriculum,criteria_json FROM exercises WHERE school_id=? AND external_id=? AND revision=?',[$u['school_id'],$external,$revision]);
+   if($existing) {
+     if(!$samePublication($existing))fail(409,'Revisión en uso con distinto contenido: incremente la revisión');
+     respond(['ok'=>true,'exercise_id'=>(int)$existing['id'],'sha256'=>$hash,'already_received'=>true]);
+   }
+   try {
+     $db->prepare('INSERT INTO exercises(school_id,teacher_id,external_id,revision,title,module_code,curriculum,criteria_json,manifest_json,zip_path,sha256) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+       ->execute([$u['school_id'],$u['id'],$external,$revision,$title,$module,$curriculum,$criteriaJson,$contents,$file,$hash]);
+   } catch(PDOException $e) {
+     // Otra petición idéntica pudo terminar durante el INSERT.
+     $existing=fetch_one('SELECT id,teacher_id,sha256,title,module_code,curriculum,criteria_json FROM exercises WHERE school_id=? AND external_id=? AND revision=?',[$u['school_id'],$external,$revision]);
+     if(!$samePublication($existing))fail(409,'Revisión en uso con distinto contenido: incremente la revisión');
+     respond(['ok'=>true,'exercise_id'=>(int)$existing['id'],'sha256'=>$hash,'already_received'=>true]);
+   }
+   respond(['ok'=>true,'exercise_id'=>(int)$db->lastInsertId(),'sha256'=>$hash,'already_received'=>false],201);
  }
  if ($route==='library' && $method==='GET') {
    require_auth(['admin','teacher']);$rows=fetch_all('SELECT id,external_id,revision,title,module_code,curriculum,criteria_json,created_at FROM exercises WHERE school_id=? ORDER BY created_at DESC,id DESC',[$u['school_id']]);
@@ -134,9 +155,20 @@ try {
    $attempts=(int)($in['max_attempts']??3);if($attempts<1 || $attempts>100)fail(422,'Intentos incorrectos');
    $due=$in['due_at']??null;
    if($due!==null && (!is_string($due)||!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/',$due)))fail(422,'Fecha UTC no válida');
-   try{$db->prepare('INSERT INTO assignments(group_id,exercise_id,assigned_by,due_at,max_attempts) VALUES(?,?,?,?,?)')->execute([$gid,$eid,$u['id'],$due,$attempts]);}
-   catch(PDOException $e){fail(409,'Este ejercicio ya está asignado al grupo');}
-   respond(['ok'=>true,'assignment_id'=>(int)$db->lastInsertId()],201);
+   $existing=fetch_one('SELECT * FROM assignments WHERE group_id=? AND exercise_id=?',[$gid,$eid]);
+   if($existing) {
+     if((int)$existing['max_attempts']!==$attempts || $existing['due_at']!==$due)fail(409,'La asignación existente tiene parámetros diferentes');
+     respond(['ok'=>true,'assignment_id'=>(int)$existing['id'],'already_received'=>true]);
+   }
+   try {
+     $db->prepare('INSERT INTO assignments(group_id,exercise_id,assigned_by,due_at,max_attempts) VALUES(?,?,?,?,?)')
+        ->execute([$gid,$eid,$u['id'],$due,$attempts]);
+   } catch(PDOException $e) {
+     $existing=fetch_one('SELECT * FROM assignments WHERE group_id=? AND exercise_id=?',[$gid,$eid]);
+     if(!$existing || (int)$existing['max_attempts']!==$attempts || $existing['due_at']!==$due)fail(409,'Asignación existente incompatible');
+     respond(['ok'=>true,'assignment_id'=>(int)$existing['id'],'already_received'=>true]);
+   }
+   respond(['ok'=>true,'assignment_id'=>(int)$db->lastInsertId(),'already_received'=>false],201);
  }
  if ($route==='pull' && $method==='GET') {
    if ($u['role']==='student') {
