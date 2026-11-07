@@ -20,6 +20,9 @@ async function refresh(){
   state.library=(await api('library')).items;
   state.assignments=(await api('pull')).items;
   if(state.user.role==='admin'){
+    const schools=await api('schools');
+    $('#schoolManagement').hidden=!schools.can_create;
+    $('#schoolsListing').textContent='Centros registrados: '+schools.items.map(x=>x.name).join(' · ');
     const users=(await api('users')).items.filter(x=>x.role==='teacher'||x.role==='student');
     const sel=$('#resetUserId');
     sel.innerHTML=users.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.display_name)+' · '+esc(x.email)+'</option>').join('');
@@ -79,6 +82,11 @@ $('#logout').addEventListener('click',()=>{invoke(async()=>{await api('logout',{
 $('#createGroup').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{await api('groups',formData(e.currentTarget));await refresh();msg('Grupo creado.');});});
 $('#enroll').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{const f=formData(e.currentTarget);await api('enroll',{group_id:+f.group_id,student_email:f.student_email});msg('Alumno matriculado.');});});
 $('#newUser').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{await api('users',formData(e.currentTarget));e.currentTarget.reset();await refresh();msg('Usuario creado con contraseña temporal.');});});
+$('#schoolForm').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{
+ const f=formData(e.currentTarget);
+ await api('schools',{name:f.name,admin_name:f.admin_name,admin_email:f.admin_email,admin_password:f.admin_password});
+ e.currentTarget.reset();await refresh();msg('Nuevo centro y administrador creados de forma independiente.');
+});});
 $('#resetPasswordForm').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{
   const f=formData(e.currentTarget);await api('reset_password',{user_id:+f.user_id,new_password:f.new_password});
   e.currentTarget.reset();msg('Contraseña restablecida. El usuario deberá cambiarla al acceder.');
