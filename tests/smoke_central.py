@@ -187,6 +187,16 @@ with sync_playwright() as playwright:
                 queued=json.loads(page.evaluate("window.__fake.objects.get('central_profile_1_15_queue')"))
                 assert len(queued)==1 and queued[0]['action']=='publish',queued
                 assert queued[0]['payload']['external_id']==project['id']
+                # La asignación docente se prepara sin conexión y permanece en la cola.
+                page.context.set_offline(True)
+                page.evaluate("""()=>{
+                  document.querySelector('#central-group').innerHTML='<option value="41">Grupo 41</option>';
+                  document.querySelector('#central-exercise').innerHTML='<option value="19">Supuesto 19</option>';
+                }""")
+                page.locator('button[data-central="assign"]').click()
+                page.wait_for_function("JSON.parse(window.__fake.objects.get('central_profile_1_15_queue')||'[]').length===2")
+                queued=json.loads(page.evaluate("window.__fake.objects.get('central_profile_1_15_queue')"))
+                assert queued[1]['action']=='assign' and queued[1]['payload']['group_id']==41 and queued[1]['payload']['exercise_id']==19
             assert not errors,(edition,errors[:10])
             print('OK:',edition,'autenticación inicial, SQLite, biblioteca/entrega offline')
             context.close()
