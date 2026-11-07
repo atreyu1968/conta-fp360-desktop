@@ -43,3 +43,11 @@ for ed in ('studio','aula'):
  assert 'window.CONTA_DESKTOP.ready.then(start)' in html
  assert 'sqlite_put_many' in (ROOT/'web'/ed/'desktop-bridge.js').read_text(encoding='utf-8')
 print('SQLite nativo, migración, copia y separación: OK')
+
+for ed in ('studio','aula'):
+ html=(ROOT/'web'/ed/'index.html').read_text(encoding='utf-8')
+ assert '<script src="./central-sync.js"></script>' in html
+ assert (ROOT/'web'/ed/'central-sync.js').is_file()
+assert (ROOT/'web/studio/central-sync.js').read_bytes()==(ROOT/'web/aula/central-sync.js').read_bytes()
+assert 'mod updater;' in (ROOT/'src-tauri/src/lib.rs').read_text(encoding='utf-8')
+print('Central: script integrado, sincronización offline y actualizador Tauri: OK')
