@@ -50,7 +50,7 @@ Todas las rutas se publican como `https://dominio/conta-fp360/api.php?r=NOMBRE` 
 
 ## 4. Actualizador de escritorio
 
-El directorio `desktop/` contiene un adaptador de sincronización para Studio y Aula y los parches de integración con Tauri 2. Actualizar desde GitHub implica **claves criptográficas de firma** (obligatorias por Tauri). No existe actualización instalada directamente hasta generar una pareja de claves, guardar la privada en GitHub Actions Secrets y configurar la pública al compilar las aplicaciones. El certificado comercial de firma Windows y la firma/notarización macOS son requisitos de distribución adicionales, no sustitutos de la firma de actualizaciones.
+La integración actualizada del escritorio se mantiene en GitHub, en el mismo repositorio, bajo `web/studio/`, `web/aula/` y `src-tauri/`. Este ZIP contiene **únicamente el servidor cPanel y sus pruebas**, no los instaladores de escritorio. Actualizar desde GitHub implica **claves criptográficas de firma** (obligatorias por Tauri). La comprobación e instalación desde GitHub Releases permanece desactivada hasta generar una pareja de claves, guardar la privada en GitHub Actions Secrets y configurar la pública al compilar las aplicaciones. El certificado comercial de firma Windows y la firma/notarización macOS son requisitos de distribución adicionales, no sustitutos de la firma de actualizaciones.
 
 La comprobación de versiones nunca depende del servidor cPanel. No instalar una actualización si existe alguna operación local de escritura pendiente; antes de cualquier migración de esquema debe existir una copia íntegra.
 
@@ -59,7 +59,7 @@ La comprobación de versiones nunca depende del servidor cPanel. No instalar una
 - `php -l` para sintaxis de los PHP.
 - `node --check` para JavaScript.
 - `python tests/check_schema.py` para creación de tablas y restricciones de claves/roles/duplicados en SQLite real.
-- `python tests/test_cpanel_http.py`: prueba HTTP completa (instalación, usuarios, roles, grupos, paquetes ZIP, asignaciones, entregas repetidas y tardías, calificaciones por CE, resultados RA y bloqueo de intentos). **Requiere PHP con `pdo_sqlite` y `ZipArchive`**. En este entorno se han validado la sintaxis PHP, la estructura SQLite y el JavaScript; no dispone de esas extensiones para ejecutar la prueba HTTP.
+- `python tests/test_cpanel_http.py`: prueba HTTP completa (instalación, usuarios, roles, grupos, paquetes ZIP, asignaciones, entregas repetidas y tardías, calificaciones por CE, resultados RA y bloqueo de intentos). **Requiere PHP con `pdo_sqlite` y `ZipArchive`**. La prueba HTTP completa se ha ejecutado satisfactoriamente en GitHub Actions con PHP 8.3, PDO_SQLITE y ZIP. El entorno local utilizado para crear el ZIP no dispone de esas extensiones. Todavía se requiere una prueba adicional en un cPanel real.
 
 ## 6. Seguridad y protección de datos
 
