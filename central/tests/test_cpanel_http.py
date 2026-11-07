@@ -125,7 +125,7 @@ def test_http():
             ok(accepted['late'] is True,'No se ha marcado como tardía una entrega offline recibida fuera del plazo')
             repeated=json_request(base,'submit',delivery,st)
             ok(repeated['already_received'] is True and repeated['submission_id']==accepted['submission_id'],'Reintento no idempotente')
-            bad={**delivery,'work':{'asientos':[{'id':1,'debe':999}]}}
+            bad={**delivery,'work':{'manifest_id':identifier,'asientos':[{'id':1,'debe':999}]}}
             json_request(base,'submit',bad,st,expected=409)
             badattempt={**delivery,'event_id':'TESTOFFLINE2026A2','attempt':1}
             json_request(base,'submit',badattempt,st,expected=409)
