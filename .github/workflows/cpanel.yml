@@ -1,0 +1,45 @@
+name: CONTA FP360 Central - PHP SQLite y API HTTP
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'central/**'
+      - '.github/workflows/cpanel.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'central/**'
+      - '.github/workflows/cpanel.yml'
+permissions:
+  contents: read
+jobs:
+  validar_cpanel:
+    name: PHP 8.3, SQLite, ZIP y prueba funcional HTTP
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, zip
+          tools: none
+          coverage: none
+      - name: Verificar extensiones necesarias
+        shell: bash
+        run: |
+          php -m
+          php -r "if (!in_array('sqlite', PDO::getAvailableDrivers())) exit(1); if (!class_exists('ZipArchive')) exit(2);"
+      - name: Sintaxis PHP y JavaScript del panel
+        shell: bash
+        run: |
+          find central/cpanel -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+          node --check central/cpanel/assets/dashboard.js
+      - name: Integridad del esquema y de las operaciones contables
+        run: python central/tests/check_schema.py
+      - name: Flujo HTTP integral con datos ficticios
+        run: python central/tests/test_cpanel_http.py
