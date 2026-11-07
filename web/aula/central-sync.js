@@ -92,11 +92,24 @@ async function download(){
  if(!user||user.role!=='student')throw Error('Acceda como alumno');
  const a=assignments.find(x=>+x.assignment_id===+$('#central-assignment').value);if(!a)throw Error('Sin asignación');
  const blob=await api('package',null,{id:a.exercise_id});
+ const binary=await blob.arrayBuffer();
+ if(a.sha256 && globalThis.crypto?.subtle){
+   const digest=new Uint8Array(await crypto.subtle.digest('SHA-256',binary));
+   const hex=[...digest].map(n=>n.toString(16).padStart(2,'0')).join('');
+   if(hex.toLowerCase()!==String(a.sha256).toLowerCase())throw Error('El ZIP descargado no coincide con su hash SHA-256.');
+ }
  const input=$('#importStudent');if(!input)throw Error('No está disponible la importación de Aula');
- const dt=new DataTransfer();dt.items.add(new File([blob],a.external_id+'.zip',{type:'application/zip'}));input.files=dt.files;
- await save('active_assignment',a);
+ const dt=new DataTransfer();dt.items.add(new File([binary],a.external_id+'.zip',{type:'application/zip'}));input.files=dt.files;
  input.dispatchEvent(new Event('change',{bubbles:true}));
- status('Paquete descargado. Continúe trabajando offline.');
+ let imported=false;
+ for(let tries=0;tries<35;tries++){
+   const installed=await d.dbGet('package');
+   if(installed?.manifest?.id===a.external_id){imported=true;break;}
+   await new Promise(resolve=>setTimeout(resolve,100));
+ }
+ if(!imported)throw Error('La importación no ha confirmado el paquete en SQLite. Revise el ZIP.');
+ await save('active_assignment',a);
+ status('Paquete verificado y disponible para trabajar sin conexión.');
 }
 async function prepare(){
  const a=await load('active_assignment');if(!a)throw Error('Descargue una asignación antes de entregarla');
