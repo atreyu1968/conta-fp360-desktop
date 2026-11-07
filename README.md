@@ -1,6 +1,6 @@
-# CONTA FP360 Desktop — v2.1
+# CONTA FP360 Desktop — v2.2 (SQLite)
 
-Dos aplicaciones independientes de contabilidad educativa para Windows 10 y Windows 11 (x64), construidas con **Tauri 2** y las interfaces originales de CONTA FP360 v2.1.
+Dos aplicaciones independientes de contabilidad educativa para Windows 10 y Windows 11 (x64), con compilaciones Linux adicionales, construidas con **Tauri 2** y las interfaces originales de CONTA FP360 v2.1.
 
 **Autor y titular:** Francisco Javier González Rolo. Reservados todos los derechos. No se concede licencia abierta de reutilización del código (UNLICENSED).
 
@@ -42,18 +42,18 @@ Los instaladores aparecen en src-tauri/target/release/bundle/nsis. Los ejecutabl
 ## Arquitectura y seguridad
 
 - web/studio/index.html y web/aula/index.html conservan los motores HTML/JavaScript de la versión 2.1.
-- web/*/desktop-bridge.js adapta las descargas a un diálogo nativo, abre enlaces externos en el navegador predeterminado y adapta la impresión.
-- src-tauri/src/lib.rs implementa un comando acotado de escritura de archivos solicitado por el usuario, con límite de 200 MB.
+- web/*/desktop-bridge.js adapta las descargas, enlaces, impresión y migración/persistencia SQLite con cola de escrituras.
+- src-tauri/src/lib.rs implementa la exportación nativa con límite de 200 MB; src-tauri/src/storage.rs incorpora SQLite, copias y restauración.
 - src-tauri/tauri.conf.json y tauri.aula.conf.json definen identificadores y perfiles diferentes.
 - No se incorpora un servidor de evaluación remota ni garantía de antifraude. **No distribuir el JSON maestro ni las soluciones docentes al alumnado.**
-- El guardado usa localStorage/IndexedDB del perfil WebView2. Conviene exportar copias de seguridad antes de reinstalar, cambiar de equipo o limpiar datos.
+- **SQLite local incorporado** es el almacenamiento persistente principal. Se migran automáticamente los datos previos de localStorage e IndexedDB y se ofrecen copia y restauración nativas desde el menú lateral. Consulte [SQLITE.md](SQLITE.md) para rutas, seguridad y recuperación.
 
 ## Pruebas
 
-El flujo valida la estructura, comprueba la sintaxis del JavaScript y realiza pruebas de arranque y exportación simulada con Chromium. Estas pruebas **no sustituyen** las pruebas de WebView2 real en Windows: guardado de PDF/ZIP, impresión, reimportación, datos tras reinstalación, ejecución sin conexión y control del acceso a soluciones.
+El flujo valida la estructura, comprueba la sintaxis del JavaScript y realiza pruebas de arranque, migración y comandos SQLite simulados con Chromium. Estas pruebas **no sustituyen** las pruebas de WebView2 real en Windows: guardado de PDF/ZIP, impresión, reimportación, datos tras reinstalación, ejecución sin conexión y control del acceso a soluciones.
 
 Se recomienda efectuar una revisión curricular y fiscal docente de los supuestos antes de utilizarlos con alumnado.
 
 ## Compatibilidad
 
-Windows 10 y 11 x64. No se incluye Moodle LTI ni SCORM en estas dos aplicaciones Desktop.
+Windows 10 y 11 x64; paquetes Linux x64 en Actions. macOS no está todavía empaquetado. No se incluye Moodle LTI ni SCORM en estas dos aplicaciones Desktop.
