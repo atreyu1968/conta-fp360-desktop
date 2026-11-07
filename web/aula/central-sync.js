@@ -3,7 +3,7 @@
 'use strict';
 const d=window.CONTA_DESKTOP;
 if(!d?.dbGet||!d?.dbSet)return;
-const studio=location.pathname.includes('/studio/');
+let studio=false;
 const $=s=>document.querySelector(s);
 const escape=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let token=null,user=null,server=localStorage.getItem('cfp360_central_url')||'';
@@ -130,6 +130,7 @@ function open(){
  tasks.then(values=>{if(studio){groups=values[0]||[];library=values[1]||[];report=values[2]||null;}else assignments=values[0]||[];if($('#central-modal')){render();if(report)showReport(report);}}).catch(console.warn);
 }
 function setup(){
+ studio=/\bstudio\b/i.test(document.title);
  const parent=$('.top-actions');if(!parent)return;
  const b=document.createElement('button');b.className='btn';b.id='cfp-central-button';b.textContent='⇅ CONTA FP360 Central';b.addEventListener('click',open);parent.prepend(b);
  const style=document.createElement('style');style.textContent='#central-modal{position:fixed;inset:0;z-index:9999;background:#0c213ab9;display:grid;place-items:center;padding:16px}.central-dialog{background:white;border-radius:12px;padding:23px;width:min(680px,100%);max-height:90vh;overflow:auto;color:#21344c;font:14px/1.5 system-ui}.central-head{display:flex;align-items:center;justify-content:space-between}.central-dialog input,.central-dialog select{display:block;width:100%;padding:8px;margin:5px 0 12px;border:1px solid #b9cadb;border-radius:6px}.central-dialog label{display:block;margin:7px 0}.central-dialog button{padding:8px 10px;margin:4px;background:#eaf2ff;border:1px solid #b8cce2;border-radius:7px}.central-dialog table td,.central-dialog table th{padding:4px;border:1px solid #cbd6e5}';document.head.appendChild(style);
