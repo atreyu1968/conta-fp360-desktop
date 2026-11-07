@@ -48,9 +48,12 @@ def response(route,student):
           'name':'Alumno de pruebas' if student else 'Profesor de pruebas',
           'role':'student' if student else 'teacher','school_id':1}}
     if route=='pull':
-        return {'ok':True,'items':[{'assignment_id':81,'title':'Supuesto de prueba','external_id':'TEST_SYNC',
-          'exercise_id':11,'revision':1,'module_code':'0441','max_attempts':3,
-          'sha256':hashlib.sha256(pack('TEST_SYNC')).hexdigest()}]}
+        result=[]
+        for aid,eid,title in ((81,'TEST_SYNC','Supuesto 1'),(82,'TEST_B','Supuesto 2'),(83,'TEST_C','Supuesto 3')):
+            result.append({'assignment_id':aid,'title':title,'external_id':eid,
+             'exercise_id':aid-70,'revision':1,'module_code':'0441','max_attempts':3,
+             'sha256':hashlib.sha256(pack(eid)).hexdigest()})
+        return {'ok':True,'items':result}
     if route in ('library','groups'):
         return {'ok':True,'items':[]}
     if route in ('submit','assign','logout'):
@@ -75,7 +78,8 @@ with sync_playwright() as playwright:
                 parsed=urlsplit(route.request.url)
                 action=parse_qs(parsed.query).get('r',['health'])[0]
                 if action=='package':
-                    route.fulfill(status=200,body=pack('TEST_SYNC'),
+                    eid={11:'TEST_SYNC',12:'TEST_B',13:'TEST_C'}.get(int(parse_qs(parsed.query).get('id',['11'])[0]),'TEST_SYNC')
+                    route.fulfill(status=200,body=pack(eid),
                             headers={'Content-Type':'application/zip'})
                 else:
                     route.fulfill(status=200,json=response(action,edition=='aula'))
@@ -102,6 +106,24 @@ with sync_playwright() as playwright:
                   try{return JSON.parse(raw).manifest.id==='TEST_SYNC';}catch{return false;}
                 }""",timeout=15000)
                 page.wait_for_function("Boolean(window.__fake.objects.get('central_profile_1_31_active_assignment'))")
+                # Reemplazar el ZIP activo no debe borrar otros ejercicios guardados.
+                for assignment_id,exercise_id in ((82,'TEST_B'),(83,'TEST_C')):
+                    page.locator('#central-assignment').select_option(str(assignment_id))
+                    page.locator('button[data-central="download"]').click()
+                    page.wait_for_function("""id=>{
+                       const data=window.__fake.objects.get('package');
+                       return data && JSON.parse(data).manifest.id===id;
+                    }""",arg=exercise_id)
+                cache=json.loads(page.evaluate("window.__fake.objects.get('central_profile_1_31_packages')"))
+                assert len(cache)==3,cache
+                # Interrumpir la red y reabrir el primero desde el ZIP SQLite.
+                page.context.set_offline(True)
+                page.locator('#central-cached').select_option('81')
+                page.locator('button[data-central="openCached"]').click()
+                page.wait_for_function("""()=>{
+                  const data=window.__fake.objects.get('package');
+                  return data && JSON.parse(data).manifest.id==='TEST_SYNC';
+                }""")
                 page.evaluate("""()=>{
                   localStorage.setItem('cfp360_journal_TEST_SYNC',
                    JSON.stringify({asientos:[{id:'A1',lineas:[]}],cuentas:{}}));
