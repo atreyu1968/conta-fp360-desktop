@@ -39,6 +39,8 @@ jobs:
           python -m playwright install --with-deps chromium
       - name: Probar SQLite simulado y exportaciones locales
         run: python tests/smoke_browser.py
+      - name: Probar Central offline en Studio y Aula
+        run: python tests/smoke_central.py
 
   linux:
     name: Paquetes ${{ matrix.edicion }} Linux x64
