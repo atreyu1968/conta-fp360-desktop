@@ -43,6 +43,7 @@ async function refreshReport(){
  state.submissions=(await api('submissions',null,{group_id:gid})).items;
  $('#submissionId').innerHTML=opt(state.submissions.map(s=>({id:s.id,name:s.display_name+' · '+s.title+' · intento '+s.attempt})));
  updateCriteria();
+ renderSubmissionEvidence().catch(e=>msg(e.message,true));
  window.CONTA_VISUAL?.report(state);
 }
 function updateCriteria(){const s=state.submissions.find(x=>x.id===+$('#submissionId').value);$('#criterionSelect').innerHTML=opt((s?.criteria||[]).map(x=>({id:x.code,name:x.code+' ('+x.ra+')'})));}
@@ -100,8 +101,22 @@ $('#refreshReports').addEventListener('click',()=>invoke(async()=>{await refresh
 $('#reportGroup').addEventListener('change',()=>invoke(refreshReport));
 $('#submissionId').addEventListener('change',()=>{
  updateCriteria();
+ renderSubmissionEvidence().catch(e=>msg(e.message,true));
  updateGradeHistory().catch(e=>msg(e.message,true));
 });
+async function renderSubmissionEvidence(){
+ const sid=+$('#submissionId').value,place=$('#submissionPreview');
+ if(!sid){place.textContent='No existen entregas para corregir.';return;}
+ const response=await api('submission',null,{id:sid}),work=response.item.work||{};
+ const allowed=new Set((state.submissions.find(x=>x.id===sid)?.criteria||[]).map(x=>x.code));
+ const ce=Array.isArray(work.resultadoEvidencias?.ce)?work.resultadoEvidencias.ce.filter(x=>allowed.has(x.codigo)):[];
+ const count=Array.isArray(work.asientos)?work.asientos.length:0,activities=Object.keys(work.respuestasActividades||{}).length;
+ place.innerHTML='<div class="note"><strong>Vista previa de la entrega</strong><p>Asientos: '+count+' · Actividades respondidas: '+activities+
+  '. Las evidencias procedentes del alumno NO constituyen calificaciones validadas.</p></div>'+
+  (ce.length?'<table><thead><tr><th>Criterio</th><th>Evidencias</th><th>Nota orientativa</th></tr></thead><tbody>'+
+   ce.map(x=>'<tr><td>'+esc(x.codigo)+'</td><td>'+esc(x.respondidas??0)+' / '+esc(x.actividades??0)+'</td><td>'+esc(x.nota===null?'Pendiente':x.nota)+' '+(x.revision?'· Revisión docente':'· No verificada')+'</td></tr>').join('')+'</tbody></table>':
+   '<p class="note">La entrega no incluye desglose de evidencias por criterio.</p>');
+}
 async function updateGradeHistory(){
   const id=+$('#submissionId').value;if(!id){$('#gradeHistory').textContent='Sin entrega seleccionada';return;}
   const history=(await api('grade_history',null,{submission_id:id})).items;
