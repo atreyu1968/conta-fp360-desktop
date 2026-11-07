@@ -73,9 +73,15 @@ function setup_existing(): ?array {
     $file=__DIR__.'/config.php';
     if (is_link($file)) throw new RuntimeException('config.php no puede ser un enlace simbólico.');
     if (!is_file($file)) return null;
-    $cfg=require $file;
-    if (!is_array($cfg)) throw new RuntimeException('config.php no devuelve un array válido.');
-    return $cfg;
+    try {
+        $cfg=require $file;
+        if (!is_array($cfg)) throw new RuntimeException('config.php no devuelve un array válido.');
+        return $cfg;
+    } catch (Throwable $e) {
+        error_log('[CONTA FP360 instalación] Configuración anterior dañada: '.$e->getMessage());
+        // Se conserva una copia en la carpeta privada antes de regenerarla.
+        return ['_invalid_config'=>true];
+    }
 }
 function setup_installed(?array $cfg): bool {
     if (!$cfg || !isset($cfg['db_path']) || !is_string($cfg['db_path']) || !is_file($cfg['db_path'])) return false;
@@ -164,6 +170,7 @@ $checks=[];
 $private='';
 $legacy=false;
 try {
+    $site=setup_site_url(); // Exigir HTTPS ANTES de recibir contraseñas.
     $home=setup_home();
     $private=setup_private($home);
     $authKey=setup_key($private);
@@ -187,9 +194,8 @@ try {
             $person=trim((string)($_POST['name']??''));
             $email=strtolower(trim((string)($_POST['email']??'')));
             $password=(string)($_POST['password']??'');
-            if (mb_strlen($school)<3 || mb_strlen($person)<3 || !filter_var($email,FILTER_VALIDATE_EMAIL) || strlen($password)<12)
+            if (strlen($school)<3 || strlen($person)<3 || !filter_var($email,FILTER_VALIDATE_EMAIL) || strlen($password)<12)
                 throw new RuntimeException('Revise el centro, nombre, correo y contraseña (mínimo 12 caracteres).');
-            $site=setup_site_url();
             $defaultDb=$private.'/conta-central.sqlite3';
             $oldDb=is_string($existing['db_path']??null)?$existing['db_path']:'';
             $oldUploads=is_string($existing['upload_dir']??null)?$existing['upload_dir']:'';
@@ -249,10 +255,10 @@ try {
             $sql=file_get_contents(__DIR__.'/schema.sql');
             if (!is_string($sql)) throw new RuntimeException('Falta schema.sql.');
             $pdo->exec($sql);
-            if ((int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn()>0)
-                throw new RuntimeException('Ya existe un administrador. No se permite volver a instalar.');
-            $pdo->beginTransaction();
+            $pdo->exec('BEGIN IMMEDIATE');
             try {
+                if ((int)$pdo->query('SELECT COUNT(*) FROM users')->fetchColumn()>0)
+                    throw new RuntimeException('Ya existe un administrador. No se permite volver a instalar.');
                 $stmt=$pdo->prepare('INSERT INTO schools(name) VALUES(?)');
                 $stmt->execute([$school]);
                 $schoolId=(int)$pdo->lastInsertId();
