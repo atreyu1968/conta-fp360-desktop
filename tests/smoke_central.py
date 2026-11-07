@@ -55,7 +55,7 @@ def response(route,student):
         for aid,eid,title in ((81,'TEST_SYNC','Supuesto 1'),(82,'TEST_B','Supuesto 2'),(83,'TEST_C','Supuesto 3')):
             result.append({'assignment_id':aid,'title':title,'external_id':eid,
              'exercise_id':aid-70,'revision':1,'module_code':'0441','max_attempts':3,
-             'sha256':hashlib.sha256(pack(eid)).hexdigest()})
+             'sha256':hashlib.sha256(pack(eid)).hexdigest(),'used_attempts':2 if aid==83 else 0})
         return {'ok':True,'items':result}
     if route in ('library','groups'):
         return {'ok':True,'items':[]}
@@ -102,6 +102,7 @@ with sync_playwright() as playwright:
             if edition=='aula':
                 page.locator('button[data-central="receive"]').click()
                 page.wait_for_function("Boolean(window.__fake.objects.get('central_profile_1_31_assignments'))")
+                page.wait_for_function("JSON.parse(window.__fake.objects.get('central_profile_1_31_attempts')||'{}')['83']===2")
                 page.locator('button[data-central="download"]').click()
                 page.wait_for_function("""()=>{
                   const raw=window.__fake.objects.get('package');
