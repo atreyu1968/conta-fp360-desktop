@@ -23,39 +23,49 @@ EXCLUDED_SUFFIXES = {".db", ".sqlite", ".sqlite3", ".db-wal", ".db-shm",
 REQUIRED = {"index.php", "api.php", "bootstrap.php", "features.php",
             "config.example.php", "schema.sql", "install.php", ".htaccess",
             "assets/dashboard.js", "assets/visual.js"}
-DOC = """CONTA FP360 CENTRAL · INSTALACIÓN EN CPANEL
-Destino público: https://conta.redfp360.net
-Repositorio: atreyu1968/conta-fp360-desktop · rama de consolidación.
+DOC = """CONTA FP360 CENTRAL · INSTALADOR AUTOMÁTICO 2.4 PARA CPANEL
+Destino: https://conta.redfp360.net
 
-1. Crear conta.redfp360.net como dominio/subdominio con directorio propio.
-   Comprobar que tiene registro DNS y HTTPS con certificado válido.
-2. Seleccionar PHP 8.2 o superior. Habilitar PDO_SQLITE, sqlite3 y ZIP.
-3. Subir ESTE ZIP al directorio raíz del subdominio y EXTRAERLO allí.
-   IMPORTANTE: index.php y api.php deben quedar en la raíz del subdominio,
-   no dentro de otra carpeta 'cpanel' o 'central'.
-4. Copiar config.example.php como config.php. La URL del dominio
-   ya está preconfigurada. Cambiar los marcadores 'REEMPLAZAR-...'
-   por una clave de instalación aleatoria (>=32 caracteres) y el correo
-   del administrador propietario. Nunca almacenar esas claves en GitHub.
-5. Comprobar las rutas de db_path y upload_dir. Deben apuntar FUERA
-   del directorio público de la web, con permisos de escritura PHP.
-   Si el alojamiento no lo permite, no registrar alumnado real.
-6. Abrir https://conta.redfp360.net/install.php y completar el centro
-   y el primer administrador. Inmediatamente DESPUÉS, ELIMINAR install.php.
-7. Comprobar https://conta.redfp360.net/api.php?r=health.
-   Debe devolver ok=true e initialized=true. El campo initialized no
-   sustituye la prueba de login ni garantiza que el DNS esté propagado.
-8. Acceder a https://conta.redfp360.net/ y crear profesores,
-   estudiantes y grupos. Introducir https://conta.redfp360.net en
-   Studio y Aula > Central (SIN /api.php, /install.php ni /index.php).
-9. Antes de trabajar con alumnado: validar currículo RA/CE, permisos
-   de los centros, seguridad, copia consistente SQLite y RGPD/LOPDGDD.
-   Las contraseñas de usuarios nuevas son temporales; cambiarlas al
-   primer acceso.
+ANTES DE EMPEZAR
+- PHP 8.2 o superior, PDO_SQLITE, SQLite3, ZIP y HTTPS válidos.
+- El directorio raíz del subdominio debe permitir escribir un archivo config.php.
+- Copia de seguridad del alojamiento anterior antes de reemplazar el programa.
 
-No incluye credenciales ni datos personales. Solo es el paquete web.
-Studio y Aula se instalan por separado; la firma del actualizador Tauri
-y la firma/notarización comercial son procesos independientes.
+INSTALACIÓN (SIN EDITAR CONFIG.PHP)
+1. Suba el ZIP de este paquete a la carpeta raíz del subdominio y extráigalo.
+   Los archivos index.php, api.php, install.php y .htaccess deben quedar
+   directamente en esa carpeta. Active Mostrar archivos ocultos en cPanel.
+   Al reemplazar una instalación anterior, compruebe que .htaccess sea el
+   incluido en este paquete. No suba datos reales ni contraseñas en el ZIP.
+2. Abra https://conta.redfp360.net/install.php en un navegador por HTTPS.
+3. El instalador crea una carpeta privada en la carpeta personal de cPanel
+   llamada .conta-fp360 y un archivo instalacion.clave. Este archivo NO se
+   publica por HTTP: se abre desde cPanel > Administrador de archivos >
+   carpeta principal (HOME) > Mostrar ocultos > .conta-fp360.
+4. Copie el código del archivo instalacion.clave en el formulario del
+   instalador e introduzca centro, nombre de administrador, correo y clave.
+   La autorización evita que otro visitante del nuevo sitio se registre
+   como administrador antes que usted.
+5. El instalador valida los requisitos, genera config.php automáticamente,
+   repara una ruta SQLite anterior incorrecta (si no hay base de datos
+   previa que proteger), crea SQLite y el usuario administrativo.
+6. Si tras el éxito sigue presente install.php, bórrelo manualmente
+   (el instalador intenta eliminarse por sí solo).
+7. Abra https://conta.redfp360.net/api.php?r=health (ok e initialized=true)
+   y acceda a https://conta.redfp360.net con el usuario creado.
+8. En los botones Central de Studio y Aula, introduzca únicamente
+   https://conta.redfp360.net e inicie sesión con cuentas individuales.
+
+SEGURIDAD
+- No es necesario editar config.example.php para una instalación nueva.
+- La clave instalacion.clave es temporal, generada en el hosting y borrada
+  al completar la instalación. No se imprime en el navegador ni se envía
+  por correo. Nunca introduzca claves en incidencias ni en GitHub.
+- Las bases y los paquetes están fuera de las carpetas públicas.
+- No active permisos 777. No continúe con datos reales sin la comprobación
+  RGPD/LOPDGDD y una copia de seguridad consistente de SQLite.
+- Si la instalación informa de que HOME no es escribible, deberá revisar
+  el propietario/permisos de la cuenta PHP con el proveedor.
 """
 def main():
     if not SRC.is_dir():
