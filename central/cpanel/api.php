@@ -305,6 +305,12 @@ try {
    $late=($assignment['due_at'] && gmdate('Y-m-d\TH:i:s\Z')>$assignment['due_at']) ? 1 : 0;
    $work=$in['work']??null;
    if(!is_array($work)||array_is_list($work))fail(422,'Trabajo incorrecto');
+   if(!isset($work['manifest_id']) || !is_string($work['manifest_id']) ||
+      !hash_equals((string)$assignment['external_id'],$work['manifest_id']))
+      fail(422,'El trabajo entregado no corresponde al supuesto asignado');
+   if(!isset($work['asientos']) || !is_array($work['asientos']) ||
+      !isset($work['respuestasActividades']) && !$work['asientos'])
+      fail(422,'La entrega debe contener asientos o respuestas');
    $json=json_encode($work,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
    if(strlen($json)>(int)cfg()['max_submission_bytes'])fail(413,'Trabajo demasiado grande');
    $payloadHash=hash('sha256',$json);
