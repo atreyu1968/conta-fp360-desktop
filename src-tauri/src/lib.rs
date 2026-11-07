@@ -1,3 +1,5 @@
+mod storage;
+
 use base64::Engine as _;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
@@ -62,7 +64,16 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![save_export])
+        .invoke_handler(tauri::generate_handler![
+            save_export,
+            storage::sqlite_get,
+            storage::sqlite_list,
+            storage::sqlite_put,
+            storage::sqlite_put_many,
+            storage::sqlite_delete,
+            storage::sqlite_backup,
+            storage::sqlite_restore
+        ])
         .run(tauri::generate_context!())
         .expect("No se pudo iniciar CONTA FP360 Desktop");
 }
