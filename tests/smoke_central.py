@@ -151,6 +151,31 @@ with sync_playwright() as playwright:
                 page.wait_for_function("JSON.parse(window.__fake.objects.get('central_profile_1_31_queue')||'[]').length===2")
                 queued=json.loads(page.evaluate("window.__fake.objects.get('central_profile_1_31_queue')"))
                 assert [i['payload']['attempt'] for i in queued]==[1,2],queued
+                # Prueba de carrera: se prepara una tercera entrega mientras la cola envía.
+                page.context.set_offline(False)
+                page.locator('#central-email').fill('alumno@example.test')
+                page.locator('#central-password').fill('test-password')
+                page.locator('button[data-central="login"]').click()
+                page.wait_for_function("""()=>{
+                   const status=document.querySelector('#central-status');
+                   return status&&status.textContent.includes('Sesión iniciada');
+                }""")
+                result=page.evaluate("""async()=>{
+                   const original=window.fetch.bind(window);
+                   window.fetch=(url,opts)=>String(url).includes('r=submit')?
+                      new Promise(resolve=>setTimeout(()=>resolve(
+                          new Response(JSON.stringify({ok:true}),{
+                              status:200,headers:{'Content-Type':'application/json'}
+                          })),150)):original(url,opts);
+                   try{
+                       const sending=window.CONTA_CENTRAL.send();
+                       await new Promise(resolve=>setTimeout(resolve,45));
+                       await window.CONTA_CENTRAL.prepare();
+                       await sending;
+                       return JSON.parse(window.__fake.objects.get('central_profile_1_31_queue')||'[]');
+                   }finally{window.fetch=original;}
+                }""")
+                assert len(result)==1 and result[0]['payload']['attempt']==3,result
             else:
                 project=page.evaluate("window.CONTA_FP360_STUDIO_STATE?.()")
                 assert project and project.get('id')
