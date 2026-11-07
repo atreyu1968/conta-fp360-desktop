@@ -1,5 +1,7 @@
 Options -Indexes
-<FilesMatch "^(config\.(example\.)?php|README\.md|schema\.sql)$">
+# Protección de configuración y archivos privados, incluidas copias y
+# configuraciones temporales mientras el instalador las actualiza.
+<FilesMatch "^(config(\..*)?|README\.md|schema\.sql|.*\.(?:sqlite3?|db|bak|key|log|env))$">
  Require all denied
 </FilesMatch>
 <IfModule mod_headers.c>
@@ -7,7 +9,6 @@ Options -Indexes
  Header always set Referrer-Policy "no-referrer"
  Header always set X-Frame-Options "DENY"
 </IfModule>
-
 # Algunos alojamientos cPanel/FastCGI no envían Authorization a PHP.
 # Mantener el token Bearer en el encabezado, nunca como parámetro URL.
 <IfModule mod_setenvif.c>
