@@ -37,7 +37,7 @@ jobs:
         run: |
           python -m pip install 'playwright==1.56.0'
           python -m playwright install --with-deps chromium
-      - name: Probar interfaz y exportaciones simuladas
+      - name: Probar SQLite simulado y exportaciones locales
         run: python tests/smoke_browser.py
 
   linux:
@@ -93,8 +93,8 @@ jobs:
             exit 1
           fi
           mkdir -p paquete
-          cp "${debs[0]}" "paquete/CONTA-FP360-${{ matrix.edicion }}-2.1.0-Linux-x64.deb"
-          cp "${appimages[0]}" "paquete/CONTA-FP360-${{ matrix.edicion }}-2.1.0-Linux-x64.AppImage"
+          cp "${debs[0]}" "paquete/CONTA-FP360-${{ matrix.edicion }}-2.2.0-Linux-x64.deb"
+          cp "${appimages[0]}" "paquete/CONTA-FP360-${{ matrix.edicion }}-2.2.0-Linux-x64.AppImage"
           for f in paquete/*.deb paquete/*.AppImage; do
             test "$(stat -c%s "$f")" -gt 1000000
           done
