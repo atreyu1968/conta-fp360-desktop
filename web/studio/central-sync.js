@@ -42,7 +42,8 @@ function button(name,label){return '<button type="button" data-central="'+name+'
 function choices(data,id,name){return data.map(x=>'<option value="'+escape(x[id])+'">'+escape(x[name])+'</option>').join('');}
 function render(){
  const box=$('#central-modal');if(!box)return;
- const auth=user?'<p>'+escape(user.name)+' · '+escape(user.role)+'</p>'+button('logout','Cerrar sesión'):('<label>Correo<input id="central-email" type="email"></label><label>Contraseña<input id="central-password" type="password"></label>'+button('login','Iniciar sesión'));
+ const auth=user?.must_change_password?'<p>Debe cambiar la contraseña temporal para continuar.</p><label>Contraseña actual<input type="password" id="central-old-password"></label><label>Nueva contraseña (12 caracteres o más)<input type="password" id="central-new-password" minlength="12"></label>'+button('changePassword','Cambiar contraseña'):
+  user?'<p>'+escape(user.name)+' · '+escape(user.role)+'</p>'+button('logout','Cerrar sesión'):('<label>Correo<input id="central-email" type="email"></label><label>Contraseña<input id="central-password" type="password"></label>'+button('login','Iniciar sesión'));
  const profile=localUser?'<p class="central-local-profile">Perfil offline de este ordenador: '+escape(localUser.name)+' ('+escape(localUser.role)+')</p>':'';
  const tools=studio?'<h3>Studio: biblioteca y grupos</h3><p>Genere primero el ZIP de alumnado desde Publicar paquete.</p><label>ZIP de alumnado<input id="central-zip" type="file" accept=".zip"></label><label>Revisión<input id="central-revision" type="number" min="1" value="1"></label>'+button('publish','Guardar publicación offline')+'<label>Grupo<select id="central-group">'+choices(groups,'id','name')+'</select></label><label>Ejercicio<select id="central-exercise">'+choices(library,'id','title')+'</select></label>'+button('assign','Asignar ahora')+button('report','Recibir calificaciones RA y CE')+'<div id="central-report"></div>'
  :'<h3>Aula: ejercicios y entregas</h3><label>Ejercicios asignados<select id="central-assignment">'+choices(assignments,'assignment_id','title')+'</select></label>'+button('download','Descargar y abrir')+'<label>Ejercicios guardados en este equipo<select id="central-cached">'+cachedPackages.map(a=>'<option value="'+escape(a.assignment_id)+'">'+escape(a.title)+' · revisión '+escape(a.revision)+'</option>').join('')+'</select></label>'+button('openCached','Abrir sin conexión')+button('prepare','Preparar entrega offline')+'<p>Los ZIP y las respuestas de cada supuesto se conservan por separado en SQLite. La entrega puede prepararse sin Internet.</p>';
@@ -179,12 +180,20 @@ async function act(type){
   if(type==='login'){
    await identityReady;
    const r=await api('login',{email:$('#central-email').value,password:$('#central-password').value});
+   if(r.user.must_change_password){token=r.token;user=r.user;render();status('Contraseña temporal: cámbiela para activar el perfil offline.');return;}
    const next={...r.user,server:baseUrl()};
    if(localUser && (Number(localUser.id)!==Number(next.id)||Number(localUser.school_id)!==Number(next.school_id)||localUser.server!==next.server)){
      throw Error('Este perfil offline contiene trabajos de otro usuario o servidor. Use una cuenta independiente del sistema operativo para proteger los datos del alumnado.');
    }
    if(!localUser){localUser=next;await d.dbSet('central_identity',next);}
    token=r.token;user=r.user;render();status('Sesión iniciada; los datos offline pertenecen a este usuario.');
+  }
+  if(type==='changePassword'){
+    if(!user?.must_change_password)throw Error('No hay cambio inicial pendiente.');
+    const oldPassword=$('#central-old-password')?.value;
+    const newPassword=$('#central-new-password')?.value;
+    await api('change_password',{current_password:oldPassword,new_password:newPassword});
+    token=null;user=null;render();status('Contraseña actualizada. Inicie sesión de nuevo.');
   }
   if(type==='receive')await receive();
   if(type==='send')await send();
