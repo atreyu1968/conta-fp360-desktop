@@ -7,7 +7,7 @@ on:
       - 'central/**'
       - '.github/workflows/cpanel.yml'
   push:
-    branches: [main]
+    branches: [main, feature/auditoria-integral-2026-11]
     paths:
       - 'central/**'
       - '.github/workflows/cpanel.yml'
@@ -44,5 +44,7 @@ jobs:
           grep -q 'assets/visual.js' central/cpanel/index.php
       - name: Integridad del esquema y de las operaciones contables
         run: python central/tests/check_schema.py
+      - name: Instalador sin configuración y reparación de cPanel
+        run: python central/tests/test_installer_http.py
       - name: Flujo HTTP integral con datos ficticios
         run: python central/tests/test_cpanel_http.py
