@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 require __DIR__.'/bootstrap.php';
+require __DIR__.'/features.php';
 header('X-Content-Type-Options: nosniff');
 header('Referrer-Policy: no-referrer');
 $origin=(string)($_SERVER['HTTP_ORIGIN']??'');
@@ -19,6 +20,7 @@ try {
  }
  $db=db();
  if (!fetch_one("SELECT name FROM sqlite_master WHERE type='table' AND name='users'")) fail(503,'El servidor todavía no está instalado');
+ ensure_central_features($db);
  if ($route==='login' && $method==='POST') {
    $in=json_in(); $email=strtolower(required_string($in,'email',240));$pass=required_string($in,'password',500);
    // Limitación de fuerza bruta por pareja IP/correo, sin almacenar contraseñas ni IP en claro.
@@ -37,20 +39,94 @@ try {
    $expire=time()+(int)(cfg()['token_hours']??8)*3600;
    $db->prepare('DELETE FROM tokens WHERE expires_at<=?')->execute([time()]);
    $db->prepare('INSERT INTO tokens(hash,user_id,expires_at,created_at) VALUES(?,?,?,?)')->execute([hash('sha256',$token),$u['id'],$expire,time()]);
-   respond(['ok'=>true,'token'=>$token,'expires_at'=>$expire,'user'=>['id'=>(int)$u['id'],'name'=>$u['display_name'],'role'=>$u['role'],'school_id'=>(int)$u['school_id']]]);
+   $flag=fetch_one('SELECT must_change FROM password_flags WHERE user_id=?',[$u['id']]);
+   respond(['ok'=>true,'token'=>$token,'expires_at'=>$expire,'user'=>['id'=>(int)$u['id'],'name'=>$u['display_name'],'role'=>$u['role'],'school_id'=>(int)$u['school_id'],'must_change_password'=>$flag?(bool)$flag['must_change']:false]]);
  }
  if ($route==='logout' && $method==='POST') {
    $u=require_auth();$header=(string)($_SERVER['HTTP_AUTHORIZATION']??'');
    $db->prepare('DELETE FROM tokens WHERE hash=?')->execute([hash('sha256',substr($header,7))]);respond(['ok'=>true]);
  }
  $u=require_auth();
+ if ($route==='change_password' && $method==='POST') {
+   $in=json_in();$current=required_string($in,'current_password',500);$new=required_string($in,'new_password',500);
+   secure_new_password($new);
+   $account=fetch_one('SELECT passhash FROM users WHERE id=?',[$u['id']]);
+   if(!$account||!password_verify($current,$account['passhash']))fail(401,'Contraseña actual incorrecta');
+   if(password_verify($new,$account['passhash']))fail(422,'La nueva contraseña debe ser distinta');
+   $db->beginTransaction();
+   try {
+     $db->prepare('UPDATE users SET passhash=? WHERE id=?')->execute([password_hash($new,PASSWORD_DEFAULT),$u['id']]);
+     $db->prepare('INSERT INTO password_flags(user_id,must_change) VALUES(?,0) ON CONFLICT(user_id) DO UPDATE SET must_change=0,updated_at=CURRENT_TIMESTAMP')->execute([$u['id']]);
+     $db->prepare('DELETE FROM tokens WHERE user_id=?')->execute([$u['id']]);
+     $db->commit();
+   }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+   respond(['ok'=>true,'relogin_required'=>true]);
+ }
+ $flag=fetch_one('SELECT must_change FROM password_flags WHERE user_id=?',[$u['id']]);
+ if($flag && (int)$flag['must_change']===1)fail(403,'Debe cambiar su contraseña temporal antes de continuar');
  if ($route==='me' && $method==='GET') respond(['ok'=>true,'user'=>$u]);
+ if ($route==='reset_password' && $method==='POST') {
+   require_auth(['admin']);$in=json_in();$uid=(int)($in['user_id']??0);$new=required_string($in,'new_password',500);
+   secure_new_password($new);
+   $target=fetch_one('SELECT id FROM users WHERE id=? AND school_id=? AND role IN (\'teacher\',\'student\')',[$uid,$u['school_id']]);
+   if(!$target)fail(403,'Solo puede restablecer cuentas docentes o de alumnos de su centro');
+   $db->beginTransaction();
+   try {
+      $db->prepare('UPDATE users SET passhash=? WHERE id=?')->execute([password_hash($new,PASSWORD_DEFAULT),$uid]);
+      $db->prepare('INSERT INTO password_flags(user_id,must_change) VALUES(?,1) ON CONFLICT(user_id) DO UPDATE SET must_change=1,updated_at=CURRENT_TIMESTAMP')->execute([$uid]);
+      $db->prepare('DELETE FROM tokens WHERE user_id=?')->execute([$uid]);
+      $db->commit();
+   }catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
+   respond(['ok'=>true,'must_change_password'=>true]);
+ }
+ if ($route==='curricula' && $method==='GET') {
+   require_auth(['admin','teacher']);$rows=fetch_all('SELECT module_code,territory,source_url,version,criteria_json,updated_at FROM curriculum_catalogs WHERE school_id=? ORDER BY module_code',[$u['school_id']]);
+   foreach($rows as &$row){$row['criteria']=json_decode($row['criteria_json'],true);unset($row['criteria_json']);}
+   respond(['ok'=>true,'items'=>$rows]);
+ }
+ if ($route==='curricula' && $method==='POST') {
+   require_auth(['admin']);$in=json_in();$code=required_string($in,'module_code',40);
+   $territory=required_string($in,'territory',100);$version=required_string($in,'version',100);$url=required_string($in,'source_url',1000);
+   if(!preg_match('/^https:\/\//i',$url))fail(422,'La referencia curricular debe utilizar HTTPS');
+   $items=$in['criteria']??null;
+   if(!is_array($items)||!count($items)||count($items)>600)fail(422,'Debe aportar criterios oficiales verificables');
+   $criteria=[];foreach($items as $entry){
+     if(!is_string($entry)||!preg_match('/^RA[1-9][0-9]*\.[a-z]$/',$entry)||in_array($entry,$criteria,true))fail(422,'Código curricular incorrecto o duplicado');
+     $criteria[]=$entry;
+   }
+   $db->prepare('INSERT INTO curriculum_catalogs(school_id,module_code,territory,source_url,version,criteria_json,updated_by) VALUES(?,?,?,?,?,?,?) ON CONFLICT(school_id,module_code) DO UPDATE SET territory=excluded.territory,source_url=excluded.source_url,version=excluded.version,criteria_json=excluded.criteria_json,updated_by=excluded.updated_by,updated_at=CURRENT_TIMESTAMP')
+     ->execute([$u['school_id'],$code,$territory,$url,$version,json_encode($criteria,JSON_THROW_ON_ERROR),$u['id']]);
+   respond(['ok'=>true,'module_code'=>$code,'registered'=>count($criteria)]);
+ }
+ if ($route==='grading_policy' && $method==='GET') {
+   require_auth(['admin','teacher']);$module=required_string($_GET,'module_code',40);
+   respond(['ok'=>true,'module_code'=>$module,'weights'=>grading_policy_for((int)$u['school_id'],$module)]);
+ }
+ if ($route==='grading_policy' && $method==='POST') {
+   require_auth(['admin','teacher']);$in=json_in();$module=required_string($in,'module_code',40);$w=$in['weights']??null;
+   if(!is_array($w)||array_keys($w)!==['portafolio','prueba']
+      ||!is_numeric($w['portafolio'])||!is_numeric($w['prueba']))fail(422,'Pesos incorrectos');
+   $a=(float)$w['portafolio'];$b=(float)$w['prueba'];
+   if($a<0||$a>1||$b<0||$b>1||abs($a+$b-1)>0.00001)fail(422,'Los pesos deben sumar exactamente 1');
+   $weights=['portafolio'=>$a,'prueba'=>$b];
+   $db->prepare('INSERT INTO grading_policies(school_id,module_code,weights_json,updated_by) VALUES(?,?,?,?) ON CONFLICT(school_id,module_code) DO UPDATE SET weights_json=excluded.weights_json,updated_by=excluded.updated_by,updated_at=CURRENT_TIMESTAMP')
+     ->execute([$u['school_id'],$module,json_encode($weights,JSON_THROW_ON_ERROR),$u['id']]);
+   respond(['ok'=>true,'module_code'=>$module,'weights'=>$weights]);
+ }
+ if ($route==='grade_history' && $method==='GET') {
+   require_auth(['admin','teacher']);$sid=(int)($_GET['submission_id']??0);
+   $target=fetch_one('SELECT a.group_id FROM submissions s JOIN assignments a ON a.id=s.assignment_id WHERE s.id=?',[$sid]);
+   if(!$target)fail(404,'Entrega no encontrada');teacher_group((int)$target['group_id'],$u);
+   $rows=fetch_all('SELECT h.id,h.criterion_code,h.instrument,h.previous_score,h.new_score,h.created_at,t.display_name AS teacher_name FROM grade_history h JOIN users t ON t.id=h.teacher_id WHERE h.submission_id=? ORDER BY h.id DESC',[$sid]);
+   respond(['ok'=>true,'items'=>$rows]);
+ }
+
  if ($route==='users' && $method==='POST') {
    require_auth(['admin']);$in=json_in();$name=required_string($in,'name',180);
    $email=strtolower(required_string($in,'email',240));$password=required_string($in,'password',500);
    $role=required_string($in,'role',20);
    if (!in_array($role,['teacher','student','admin'],true) || strlen($password)<12) fail(422,'Rol o contraseña incorrectos (mínimo 12 caracteres)');
-   try{$db->prepare('INSERT INTO users(school_id,email,display_name,role,passhash) VALUES(?,?,?,?,?)')->execute([$u['school_id'],$email,$name,$role,password_hash($password,PASSWORD_DEFAULT)]);}
+   try{$db->prepare('INSERT INTO users(school_id,email,display_name,role,passhash) VALUES(?,?,?,?,?)')->execute([$u['school_id'],$email,$name,$role,password_hash($password,PASSWORD_DEFAULT)]);$uid=(int)$db->lastInsertId();$db->prepare('INSERT INTO password_flags(user_id,must_change) VALUES(?,1)')->execute([$uid]);}
    catch(PDOException $e){fail(409,'El correo ya existe');}
    respond(['ok'=>true,'user_id'=>(int)$db->lastInsertId()],201);
  }
@@ -94,6 +170,8 @@ try {
      if(!is_array($c)||!isset($c['code'],$c['ra'])||!is_string($c['code'])||!is_string($c['ra'])||!preg_match('/^RA[0-9]+\.[a-z]$/',$c['code'])||!preg_match('/^RA[0-9]+$/',$c['ra'])||!str_starts_with($c['code'],$c['ra'].'.') || isset($seen[$c['code']]))fail(422,'RA/CE inválido o duplicado');
      $seen[$c['code']]=true;
    }
+   $curriculumVerified=require_curriculum_criteria((int)$u['school_id'],$module,$criteria);
+   if(!$curriculumVerified && (bool)(cfg()['require_curriculum_catalog']??false))fail(422,'Falta incorporar el currículo oficial validado de este módulo');
    $raw=required_string($in,'zip_base64',(int)ceil((int)cfg()['max_package_bytes']*1.4)+50);
    $binary=base64_decode($raw,true);if($binary===false || strlen($binary)<20 || strlen($binary)>(int)cfg()['max_package_bytes'] || substr($binary,0,2)!=='PK')fail(422,'ZIP de alumnado inválido o demasiado grande');
    if(!class_exists('ZipArchive'))fail(503,'La extensión PHP ZipArchive es necesaria para validar paquetes');
@@ -145,7 +223,7 @@ try {
  }
  if ($route==='library' && $method==='GET') {
    require_auth(['admin','teacher']);$rows=fetch_all('SELECT id,external_id,revision,title,module_code,curriculum,criteria_json,created_at FROM exercises WHERE school_id=? ORDER BY created_at DESC,id DESC',[$u['school_id']]);
-   foreach($rows as &$x){$x['criteria']=json_decode($x['criteria_json'],true);unset($x['criteria_json']);}
+   foreach($rows as &$x){$x['criteria']=json_decode($x['criteria_json'],true);$x['curriculum_verified']=curriculum_catalog_for((int)$u['school_id'],$x['module_code'])!==null;unset($x['criteria_json']);}
    respond(['ok'=>true,'items'=>$rows]);
  }
  if ($route==='assign' && $method==='POST') {
@@ -233,11 +311,16 @@ try {
    $db->beginTransaction();
    try{
      $stmt=$db->prepare('INSERT INTO grades(submission_id,criterion_code,instrument,score,teacher_id) VALUES(?,?,?,?,?) ON CONFLICT(submission_id,criterion_code,instrument) DO UPDATE SET score=excluded.score,teacher_id=excluded.teacher_id,updated_at=CURRENT_TIMESTAMP');
+     $audit=$db->prepare('INSERT INTO grade_history(submission_id,criterion_code,instrument,previous_score,new_score,teacher_id) VALUES(?,?,?,?,?,?)');
      foreach($grades as $g){
        if(!is_array($g)||!isset($g['criterion_code'],$g['instrument'],$g['score']))fail(422,'Calificación incompleta');
        $code=(string)$g['criterion_code'];$instrument=(string)$g['instrument'];$score=$g['score'];
        if(!isset($allowed[$code])||!in_array($instrument,['portafolio','prueba'],true)||!is_numeric($score)||$score<0||$score>10)fail(422,'Calificación no permitida');
-       $stmt->execute([$sid,$code,$instrument,(float)$score,$u['id']]);
+       $previous=fetch_one('SELECT score FROM grades WHERE submission_id=? AND criterion_code=? AND instrument=?',[$sid,$code,$instrument]);
+       if($previous===null || abs((float)$previous['score']-(float)$score)>0.000001) {
+         $audit->execute([$sid,$code,$instrument,$previous!==null?(float)$previous['score']:null,(float)$score,$u['id']]);
+         $stmt->execute([$sid,$code,$instrument,(float)$score,$u['id']]);
+       }
      }
      $db->commit();
    } catch(Throwable $e){if($db->inTransaction())$db->rollBack();throw $e;}
@@ -246,7 +329,7 @@ try {
  if ($route==='report' && $method==='GET') {
    require_auth(['admin','teacher']);$gid=(int)($_GET['group_id']??0);teacher_group($gid,$u);
    $students=fetch_all('SELECT u.id,u.display_name FROM users u JOIN enrollments en ON en.student_id=u.id WHERE en.group_id=? ORDER BY u.display_name',[$gid]);
-   $assignments=fetch_all('SELECT a.id,e.title,e.criteria_json FROM assignments a JOIN exercises e ON e.id=a.exercise_id WHERE a.group_id=? ORDER BY a.id',[$gid]);
+   $assignments=fetch_all('SELECT a.id,e.title,e.module_code,e.criteria_json FROM assignments a JOIN exercises e ON e.id=a.exercise_id WHERE a.group_id=? ORDER BY a.id',[$gid]);
    foreach($assignments as &$a){$a['criteria']=json_decode($a['criteria_json'],true);unset($a['criteria_json']);}
    $all=fetch_all('SELECT s.id,s.student_id,s.assignment_id,s.attempt,g.criterion_code,g.instrument,g.score FROM submissions s JOIN assignments a ON a.id=s.assignment_id LEFT JOIN grades g ON g.submission_id=s.id WHERE a.group_id=? ORDER BY s.student_id,s.assignment_id,s.attempt DESC,s.id DESC',[$gid]);
    $chosen=[];
@@ -255,15 +338,21 @@ try {
    foreach($students as $student){
      $row=['student_id'=>(int)$student['id'],'name'=>$student['display_name'],'assignments'=>[]];
      foreach($assignments as $a){
+       $weight=grading_policy_for((int)$u['school_id'],(string)$a['module_code']);
        $entry=$chosen[$student['id'].':'.$a['id']]??null;$scores=[];$ra=[];
        foreach($a['criteria'] as $c){$code=$c['code'];$instrumentScores=$entry['scores'][$code]??[];
          // 60/40 SOLO cuando ambos instrumentos cuentan con calificación confirmada.
-         $value=isset($instrumentScores['portafolio'],$instrumentScores['prueba']) ? round(0.6*$instrumentScores['portafolio']+0.4*$instrumentScores['prueba'],2):null;
+         $complete=true;$value=0.0;
+         foreach($weight as $instrument=>$factor) {
+           if($factor>0 && !isset($instrumentScores[$instrument])){$complete=false;break;}
+           if($factor>0)$value+=$factor*$instrumentScores[$instrument];
+         }
+         $value=$complete?round($value,2):null;
          $scores[$code]=['instruments'=>$instrumentScores,'final'=>$value,'complete'=>$value!==null];
          if($value!==null)$ra[$c['ra']][]=$value;
        }
        $ras=[];foreach($ra as $code=>$values){$expected=count(array_filter($a['criteria'],fn($x)=>$x['ra']===$code));$ras[$code]=['score'=>count($values)===$expected?round(array_sum($values)/count($values),2):null,'graded'=>count($values),'total'=>$expected];}
-       $row['assignments'][]=['assignment_id'=>(int)$a['id'],'title'=>$a['title'],'submission'=>$entry?['submission_id'=>$entry['submission_id'],'attempt'=>$entry['attempt']]:null,'criteria'=>$scores,'ra'=>$ras];
+       $row['assignments'][]=['assignment_id'=>(int)$a['id'],'title'=>$a['title'],'grading_weights'=>$weight,'submission'=>$entry?['submission_id'=>$entry['submission_id'],'attempt'=>$entry['attempt']]:null,'criteria'=>$scores,'ra'=>$ras];
      }
      $matrix[]=$row;
    }
