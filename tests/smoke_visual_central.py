@@ -89,6 +89,7 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
             page.locator('.workspace').wait_for(state='visible')
             if role=='admin':
                 page.locator('button.side-link[data-view=assessment]').click()
+                page.locator('details:has(#gradingPolicyForm) summary').click()
                 page.locator('#gradingPolicyForm').wait_for(state='visible')
                 page.locator('#gradingPolicyForm input[name=module_code]').fill('0441')
                 page.locator('#gradingPolicyForm input[name=portafolio]').fill('70')
@@ -96,6 +97,7 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
                 page.locator('#gradingPolicyForm button').click()
                 page.wait_for_function("document.querySelector('#message')?.textContent.includes('Ponderación')")
                 assert any(a=='grading_policy' and b and b['module_code']=='0441' for a,b in state['requests'])
+                page.locator('details:has(#gradeHistory) summary').click()
                 page.locator('#refreshGradeHistory').click()
                 page.wait_for_function("document.querySelector('#gradeHistory')?.textContent.includes('RA4.a')")
                 page.locator('button.side-link[data-view=admin]').click()
