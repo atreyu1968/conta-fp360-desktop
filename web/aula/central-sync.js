@@ -109,18 +109,12 @@ async function validateHash(bytes,expected){
 }
 async function installPackage(a,bytes){
   await validateHash(bytes,a.sha256);
-  const input=$('#importStudent');if(!input)throw Error('Importador de Aula no disponible.');
-  const dt=new DataTransfer();
-  dt.items.add(new File([bytes],a.external_id+'.zip',{type:'application/zip'}));
-  input.files=dt.files;
-  input.dispatchEvent(new Event('change',{bubbles:true}));
-  let imported=false;
-  for(let i=0;i<60;i++){
-    const p=await d.dbGet('package');
-    if(p?.manifest?.id===a.external_id){imported=true;break;}
-    await new Promise(resolve=>setTimeout(resolve,100));
-  }
-  if(!imported)throw Error('El importador no confirmó el paquete en SQLite.');
+  const loader=window.CONTA_FP360_AULA_IMPORT_ZIP;
+  if(typeof loader!=='function')throw Error('Importador offline de Aula no disponible.');
+  const imported=await loader(new File([bytes],a.external_id+'.zip',{type:'application/zip'}));
+  if(!imported)throw Error('El ZIP no ha superado la validación del importador.');
+  const pack=await d.dbGet('package');
+  if(pack?.manifest?.id!==a.external_id)throw Error('El supuesto importado no coincide con la asignación.');
   await d.flush?.();
   await save('active_assignment',a);
 }
