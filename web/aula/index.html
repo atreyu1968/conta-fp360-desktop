@@ -1575,10 +1575,13 @@ async function importZip(file) { try {
     }
     activeDemo = false;
     await setPackage({ manifest, pdfs });
+    return true;
 }
 catch (e) {
     (0, utils_js_1.alertBox)('No se ha podido importar el paquete: ' + e.message, 'error');
+    return false;
 } }
+window.CONTA_FP360_AULA_IMPORT_ZIP=importZip;
 async function importBackup(file) { try { if(cfpEvalEnd?.fechaFin||cfpExam.datos?.fin)throw new Error('Actividad finalizada: no se puede restaurar una copia.'); if(cfpExamConfig()&&cfpExam.datos?.inicio) throw new Error('La importación de copias externas está desactivada durante evaluaciones supervisadas.');
     const b = JSON.parse(await file.text());
     if (b.supuestoId !== pkg?.manifest?.id)
