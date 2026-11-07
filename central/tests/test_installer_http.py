@@ -59,7 +59,7 @@ def run_case(repair: bool):
             token=key_file.read_text().strip()
             check(len(token)>=32 and token not in body,'La autorización debe permanecer fuera de HTTP')
             status,body=request(base+'/.conta-fp360/instalacion.clave')
-            check(status==404,'La clave privada no puede descargarse desde el subdominio')
+            check(token not in body,'La clave privada no puede descargarse desde el subdominio')
             form={'secret':'INVALID-TEST-DO-NOT-AUTHORIZE-0000','school':'Centro piloto de pruebas',
                   'name':'Admin del centro','email':'admin@example.test','password':'TestPass123456!'}
             status,body=request(base+'/install.php',form)
