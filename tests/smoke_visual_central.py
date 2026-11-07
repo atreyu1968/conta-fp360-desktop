@@ -65,6 +65,8 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
                         'criteria':[{'code':'RA4.a','ra':'RA4'},{'code':'RA4.b','ra':'RA4'}]}]}
                 elif action=='users':
                     result={'ok':True,'items':[{'id':15,'display_name':'Alumno de prueba','email':'a@example.test','role':'student'}]}
+                elif action=='schools':
+                    result={'ok':True,'can_create':True,'items':[{'id':1,'name':'Centro de pruebas'}]}
                 elif action=='grade_history':
                     result={'ok':True,'items':[{'id':1,'created_at':'2026-11-07','criterion_code':'RA4.a','instrument':'portafolio',
                         'previous_score':None,'new_score':7.25,'teacher_name':'Docente de prueba'}]}
