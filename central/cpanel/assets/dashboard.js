@@ -18,6 +18,7 @@ async function refresh(){
  if(state.user.role!=='student'){
   state.groups=(await api('groups')).items;
   state.library=(await api('library')).items;
+  state.assignments=(await api('pull')).items;
   $$('.groups').forEach(el=>{const old=el.value;el.innerHTML=opt(state.groups);if(old)el.value=old;});
   $$('.exercises').forEach(el=>{const old=el.value;el.innerHTML=opt(state.library);if(old)el.value=old;});
   await refreshReport();
@@ -25,6 +26,7 @@ async function refresh(){
   state.assignments=(await api('pull')).items;
   $('#studentAssignments').innerHTML=state.assignments.length?'<table><thead><tr><th>Ejercicio</th><th>Módulo</th><th>Plazo (UTC)</th></tr></thead><tbody>'+state.assignments.map(x=>'<tr><td>'+esc(x.title)+'</td><td>'+esc(x.module_code)+'</td><td>'+esc(x.due_at||'Sin plazo')+'</td></tr>').join('')+'</tbody></table>':'No hay actividades asignadas.';
  }
+ window.CONTA_VISUAL?.refresh(state);
 }
 async function refreshReport(){
  const gid=+($('#reportGroup').value||0);if(!gid)return;
@@ -36,6 +38,7 @@ async function refreshReport(){
  state.submissions=(await api('submissions',null,{group_id:gid})).items;
  $('#submissionId').innerHTML=opt(state.submissions.map(s=>({id:s.id,name:s.display_name+' · '+s.title+' · intento '+s.attempt})));
  updateCriteria();
+ window.CONTA_VISUAL?.report(state);
 }
 function updateCriteria(){const s=state.submissions.find(x=>x.id===+$('#submissionId').value);$('#criterionSelect').innerHTML=opt((s?.criteria||[]).map(x=>({id:x.code,name:x.code+' ('+x.ra+')'})));}
 async function bytes64(file){const bytes=new Uint8Array(await file.arrayBuffer());let out='';for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(out);}
@@ -45,7 +48,7 @@ $('#loginForm').addEventListener('submit',e=>{e.preventDefault();invoke(async()=
  $('#login').hidden=true;$('#app').hidden=false;$('#logout').hidden=false;
  $('#teacher').hidden=data.user.role==='student';$('#student').hidden=data.user.role!=='student';$('#admin').hidden=data.user.role!=='admin';
  $('#nav').innerHTML='<span class="pill">'+esc(data.user.role)+'</span><span class="pill">Centro '+esc(data.user.school_id)+'</span>';
- await refresh();msg('Sesión iniciada.');
+ await refresh();window.CONTA_VISUAL?.onLogin(state);msg('Sesión iniciada.');
 });});
 $('#logout').addEventListener('click',()=>{invoke(async()=>{await api('logout',{});location.reload();});});
 $('#createGroup').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{await api('groups',formData(e.currentTarget));await refresh();msg('Grupo creado.');});});
@@ -62,5 +65,6 @@ $('#refreshReports').addEventListener('click',()=>invoke(async()=>{await refresh
 $('#reportGroup').addEventListener('change',()=>invoke(refreshReport));
 $('#submissionId').addEventListener('change',updateCriteria);
 $('#gradeForm').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{const f=formData(e.currentTarget);await api('grade',{submission_id:+f.submission_id,grades:[{criterion_code:f.criterion_code,instrument:f.instrument,score:+f.score}]});await refreshReport();msg('Calificación guardada por el profesorado.');});});
+window.CONTA_DASHBOARD_REFRESH=refresh;
 $('#exportReport').addEventListener('click',()=>{if(!state.report)return;const blob=new Blob([JSON.stringify(state.report,null,2)],{type:'application/json'});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='CONTA_FP360_informe_grupo.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);});
 })();
