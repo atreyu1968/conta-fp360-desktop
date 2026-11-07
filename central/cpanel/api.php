@@ -216,6 +216,15 @@ try {
     $manifest=json_decode($contents,true);
     if(!is_array($manifest) || ($manifest['schemaId']??'')!=='contafp360.alumno.v1'||(string)($manifest['id']??'')!==$external)fail(422,'El manifiesto no corresponde al supuesto indicado');
     foreach(['soluciones','respuestasCorrectas','asientosSolucion','profesor'] as $forbidden) if(array_key_exists($forbidden,$manifest))fail(422,'El paquete contiene datos reservados al profesor');
+    // El listado curricular de Central debe corresponder al manifiesto generado por Studio.
+    $declared=$manifest['evaluacionCurricular']['criterios']??null;
+    if($declared!==null) {
+      if(!is_array($declared))fail(422,'Criterios curriculares del ZIP incorrectos');
+      $declared=array_values(array_unique($declared));
+      $published=array_column($criteria,'code');
+      sort($declared,SORT_STRING);sort($published,SORT_STRING);
+      if($declared!==$published)fail(422,'Los criterios de la biblioteca no coinciden con los del paquete de alumnado');
+    }
     $zip->close();
    } finally { @unlink($tmp); }
    $dir=cfg()['upload_dir'];if(!is_dir($dir) && !mkdir($dir,0700,true) && !is_dir($dir))fail(500,'No se pudo crear el almacén');
