@@ -6,6 +6,8 @@ ROOT=Path(__file__).resolve().parents[1]
 base=json.loads((ROOT/'src-tauri/tauri.conf.json').read_text(encoding='utf-8'))
 aula=json.loads((ROOT/'src-tauri/tauri.aula.conf.json').read_text(encoding='utf-8'))
 assert base['identifier']!=aula['identifier']
+assert base['mainBinaryName']=='conta-fp360-studio'
+assert aula['mainBinaryName']=='conta-fp360-aula'
 assert base['build']['frontendDist']!=aula['build']['frontendDist']
 assert base['bundle']['windows']['webviewInstallMode']['type']=='offlineInstaller'
 assert base['app']['withGlobalTauri'] is True

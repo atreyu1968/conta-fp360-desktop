@@ -82,7 +82,11 @@ def run_case(repair: bool):
                 check(resp.status==200 and b'"token"' in resp.read(),'El administrador no puede iniciar sesión')
             # El instalador se elimina automáticamente si los permisos lo permiten.
             check(not (web/'install.php').exists(),'El instalador ha quedado expuesto después de instalar')
-            check(request(base+'/install.php',form)[0]==404,'No puede reinstalar una vez completado')
+            status,body=request(base+'/install.php',form)
+            # El servidor integrado puede servir index.php como fallback cuando
+            # install.php ya no existe; lo importante es que no vuelva a mostrar el formulario.
+            check(status in (200,403,404) and 'name="school"' not in body and
+                  'Instalar Central' not in body,'No puede reinstalar una vez completado')
             print('OK:', 'reparación de config.php' if repair else 'config.php creado automáticamente')
         finally:
             proc.terminate()

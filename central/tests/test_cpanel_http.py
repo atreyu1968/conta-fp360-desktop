@@ -61,6 +61,8 @@ def test_http():
     assert SOURCE.joinpath('api.php').exists()
     with tempfile.TemporaryDirectory(prefix='cfp360-http-') as temp:
         dst = Path(temp) / 'www'
+        home = Path(temp) / 'home'
+        home.mkdir()
         shutil.copytree(SOURCE, dst)
         secret = 'secret-de-prueba-no-se-usa-en-produccion-0001'
         config = "<?php return " + php_config(dst, secret) + ";\n"
@@ -68,7 +70,9 @@ def test_http():
         with socket.socket() as sock:
             sock.bind(('127.0.0.1',0));port=sock.getsockname()[1]
         base=f'http://127.0.0.1:{port}'
-        proc=subprocess.Popen(['php','-S',f'127.0.0.1:{port}','-t',str(dst)],stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
+        env={**os.environ,'HOME':str(home)}
+        proc=subprocess.Popen(['php','-S',f'127.0.0.1:{port}','-t',str(dst)],
+                              env=env,stdout=subprocess.DEVNULL,stderr=subprocess.PIPE)
         try:
             for attempt in range(80):
                 try:

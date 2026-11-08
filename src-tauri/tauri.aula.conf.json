@@ -1,5 +1,6 @@
 {
   "productName": "CONTA FP360 Aula",
+  "mainBinaryName": "conta-fp360-aula",
   "identifier": "es.atreyuserviciosdigitales.contafp360.aula",
   "build": {
     "frontendDist": "../web/aula"

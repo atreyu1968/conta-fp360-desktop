@@ -1,4 +1,4 @@
-# CONTA FP360 Desktop para Linux (v2.2)
+# CONTA FP360 Desktop para Linux (v2.3)
 
 ## Estado
 Esta guía documenta la compilación y distribución de CONTA FP360 Studio y Aula para Linux x64 (amd64).
@@ -13,21 +13,23 @@ La configuración de CI reside en `.github/workflows/linux.yml`; **no considerar
 
 ## Paquetes generados
 La acción compila `.deb` y `.AppImage` para cada edición en Ubuntu 22.04 x64:
-- `CONTA-FP360-Studio-2.2.0-Linux-x64.deb`
-- `CONTA-FP360-Studio-2.2.0-Linux-x64.AppImage`
-- `CONTA-FP360-Aula-2.2.0-Linux-x64.deb`
-- `CONTA-FP360-Aula-2.2.0-Linux-x64.AppImage`
+- `CONTA-FP360-Studio-2.3.0-Linux-x64.deb`
+- `CONTA-FP360-Studio-2.3.0-Linux-x64.AppImage`
+- `CONTA-FP360-Aula-2.3.0-Linux-x64.deb`
+- `CONTA-FP360-Aula-2.3.0-Linux-x64.AppImage`
 
 Cada artefacto publicado también contiene `SHA256SUMS.txt`. Los nombres se materializan solo si la compilación termina correctamente.
+Studio y Aula se pueden instalar a la vez: cada edición instala un ejecutable, icono y lanzador de escritorio propios.
 
 ## Instalación en Ubuntu / Debian / Linux Mint
 1. Descargue el artefacto correspondiente en GitHub → Actions → «CONTA FP360 Desktop - paquetes Linux».
 2. Extraiga el archivo ZIP del artefacto.
 3. En el terminal, desde la carpeta descargada:
    ```bash
-   sudo apt install ./CONTA-FP360-Studio-2.2.0-Linux-x64.deb
-   # O, para el alumnado:
-   sudo apt install ./CONTA-FP360-Aula-2.2.0-Linux-x64.deb
+    sudo apt install ./CONTA-FP360-Studio-2.3.0-Linux-x64.deb ./CONTA-FP360-Aula-2.3.0-Linux-x64.deb
+    # O instalar solo una edición:
+    sudo apt install ./CONTA-FP360-Studio-2.3.0-Linux-x64.deb
+    sudo apt install ./CONTA-FP360-Aula-2.3.0-Linux-x64.deb
    ```
 4. Inicie el programa desde el menú de aplicaciones del escritorio.
 
@@ -35,8 +37,8 @@ El paquete DEB deja que el gestor de paquetes resuelva las dependencias del sist
 
 ## Ejecución sin instalar (AppImage)
 ```bash
-chmod +x CONTA-FP360-Aula-2.2.0-Linux-x64.AppImage
-./CONTA-FP360-Aula-2.2.0-Linux-x64.AppImage
+chmod +x CONTA-FP360-Aula-2.3.0-Linux-x64.AppImage
+./CONTA-FP360-Aula-2.3.0-Linux-x64.AppImage
 ```
 Para el profesorado, sustituya `Aula` por `Studio`.
 AppImage empaqueta numerosas dependencias, pero sigue dependiendo de compatibilidad con glibc y, en algunos equipos, componentes FUSE. No garantiza el funcionamiento en toda distribución Linux.
@@ -49,12 +51,14 @@ Estos hashes protegen la **integridad** frente a alteraciones accidentales, pero
 
 ## Compilación manual (desarrolladores)
 Se requieren Rust, Tauri CLI v2 y bibliotecas de compilación de WebKitGTK 4.1. En Ubuntu 22.04:
+Ejecute los comandos desde la raíz del repositorio:
 ```bash
 sudo apt update
 sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file \
   libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev \
-  libfuse2 pkg-config patchelf
+  libfuse2 pkg-config patchelf python3-pil
 npm install --global '@tauri-apps/cli@2'
+python3 scripts/fix_icons.py
 cd src-tauri
 tauri build --bundles deb,appimage
 tauri build --config tauri.aula.conf.json --bundles deb,appimage
