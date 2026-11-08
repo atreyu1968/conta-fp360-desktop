@@ -2,3 +2,4 @@
 - [Webhooks PayPal de reembolso](paypal-webhooks.md) — `PAYMENT.CAPTURE.REFUNDED` identifica la captura; concilia el importe reembolsado acumulado desde PayPal.
 - [Compilación Linux en Replit](linux-packaging.md) — los paquetes Tauri compilados en Nix no son automáticamente compatibles con Ubuntu; usar un runner Ubuntu para distribuir.
 - [Entrada secreta en CLI](terminal-secret-input.md) — para pedir contraseñas ocultas en Ubuntu, usar `/dev/tty` con `os.open` y restaurar termios en `finally`.
+- [Permisos de publicación GitHub](github-publishing-permissions.md) — la conexión GitHub principal puede carecer de `workflow`; verifica el alcance antes de publicar cambios de Actions.
