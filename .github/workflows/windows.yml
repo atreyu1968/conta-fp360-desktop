@@ -66,9 +66,11 @@ jobs:
           - edicion: Studio
             config: ''
             artifact: CONTA-FP360-Studio-Windows-x64
+            binary: conta-fp360-studio
           - edicion: Aula
             config: '--config tauri.aula.conf.json'
             artifact: CONTA-FP360-Aula-Windows-x64
+            binary: conta-fp360-aula
     steps:
       - uses: actions/checkout@v4
       - name: Instalar Rust MSVC
@@ -126,7 +128,7 @@ jobs:
       - name: Prueba de arranque en Windows (proceso y ventana)
         shell: pwsh
         run: |
-          $exe = 'src-tauri/target/release/conta-fp360-desktop.exe'
+          $exe = 'src-tauri/target/release/${{ matrix.binary }}.exe'
           if (-not (Test-Path $exe)) { throw 'No existe el EXE compilado' }
           $panicFile = Join-Path $env:TEMP 'CONTA-FP360-arranque-error.txt'
           Remove-Item -LiteralPath $panicFile -ErrorAction SilentlyContinue
@@ -152,7 +154,7 @@ jobs:
           New-Item -ItemType Directory -Force -Path $target | Out-Null
           $process = Start-Process -FilePath $installer[0].FullName -ArgumentList ('/S /D=' + $target) -PassThru -Wait
           if ($process.ExitCode -ne 0) { throw "Fallo al instalar NSIS: $($process.ExitCode)" }
-          $installed = @(Get-ChildItem -Path $target -Recurse -Filter 'conta-fp360-desktop.exe' -File -ErrorAction SilentlyContinue)
+          $installed = @(Get-ChildItem -Path $target -Recurse -Filter '${{ matrix.binary }}.exe' -File -ErrorAction SilentlyContinue)
           if ($installed.Count -ne 1) { throw "El instalador no colocó el EXE esperado en $target" }
           $panicFile = Join-Path $env:TEMP 'CONTA-FP360-arranque-error.txt'
           Remove-Item -LiteralPath $panicFile -ErrorAction SilentlyContinue
