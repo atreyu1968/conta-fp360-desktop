@@ -36,3 +36,17 @@ body.authenticated>header{display:none}body.authenticated main{max-width:none;ma
 .view-panel input,.view-panel select,.view-panel textarea{padding:8px 10px}
 table th,table td{padding:9px 10px}
 }
+
+/* Información de versión de Central */
+.cfp-about-trigger{width:100%;margin-top:8px;background:transparent;border:1px solid #788eac70;border-radius:8px;color:inherit;text-align:left;padding:8px 10px;font-size:11px;cursor:pointer}
+.cfp-about-trigger:hover{background:#ffffff12}
+.cfp-about-overlay{position:fixed;inset:0;z-index:999999;background:#091a2db8;display:grid;place-items:center;padding:18px}
+.cfp-about-panel{position:relative;background:white;color:#203147;border-radius:15px;width:min(475px,100%);max-height:90vh;overflow:auto;padding:26px;box-shadow:0 18px 70px #0004}
+.cfp-about-panel h2{font-size:22px;margin:0 30px 10px 0}
+.cfp-about-panel p{font-size:13px;color:#617187}
+.cfp-about-panel dl{display:grid;grid-template-columns:140px 1fr;border-top:1px solid #e2e9f2;padding:12px 0;gap:12px;font-size:12px}
+.cfp-about-panel dt{color:#617187}.cfp-about-panel dd{margin:0;font-weight:650}
+.cfp-about-panel small{font-size:10px;color:#718098}
+.cfp-about-panel .cfp-about-x{position:absolute;right:12px;top:10px;border:0;background:transparent;font-size:26px;cursor:pointer}
+.cfp-about-buttons{display:flex;justify-content:flex-end;margin-top:18px}
+.cfp-about-accept{background:#2869da;color:white;border:0;border-radius:8px;padding:8px 18px;cursor:pointer}
