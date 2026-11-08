@@ -1,0 +1,22 @@
+/* Diálogo accesible de información y versión */
+.cfp-about-trigger{font:600 12px/1.2 Inter,'Segoe UI',Arial,sans-serif;padding:8px 12px;border-radius:9px;border:1px solid #d6e0ea;background:#fff;color:#2461b2;cursor:pointer;white-space:nowrap}
+.cfp-about-trigger:hover,.cfp-about-trigger:focus-visible{background:#edf4ff;border-color:#8db3e6}
+.cfp-about-backdrop{position:fixed;inset:0;z-index:99999;background:rgba(12,26,43,.68);display:flex;align-items:center;justify-content:center;padding:18px}
+.cfp-about-dialog{width:min(520px,100%);max-height:calc(100vh - 36px);overflow:auto;position:relative;background:#fff;border-radius:18px;box-shadow:0 20px 70px rgba(0,0,0,.3);padding:28px;color:#1b2c3f;font:14px/1.5 Inter,'Segoe UI',Arial,sans-serif}
+.cfp-about-heading{display:flex;align-items:center;gap:16px;padding-right:30px}
+.cfp-about-heading img{object-fit:contain;flex:none;border-radius:12px}
+.cfp-about-heading h2{font-size:23px;line-height:1.2;margin:4px 0 6px;color:#14263a}
+.cfp-about-kicker{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#66798c;font-weight:700}
+.cfp-about-version{font-size:12px;color:#2461b2;font-weight:700}
+.cfp-about-description{color:#566a80;margin:22px 0 15px}
+.cfp-about-facts{border:1px solid #e0e7ef;border-radius:10px;overflow:hidden;margin:0}
+.cfp-about-facts div{display:grid;grid-template-columns:42% 1fr;gap:12px;padding:10px 12px;border-bottom:1px solid #e0e7ef}
+.cfp-about-facts div:last-child{border-bottom:0}
+.cfp-about-facts dt{font-weight:650;color:#617287}
+.cfp-about-facts dd{margin:0;overflow-wrap:anywhere}
+.cfp-about-copyright{font-size:11px;color:#738296;margin:16px 0}
+.cfp-about-close{position:absolute;right:15px;top:12px;font-size:25px;border:0;background:transparent;color:#596d81;cursor:pointer;width:36px;height:36px}
+.cfp-about-footer{display:flex;justify-content:flex-end}
+.cfp-about-done{border:0;background:#2461b2;color:white;padding:9px 22px;border-radius:9px;cursor:pointer;font-weight:650}
+.cfp-about-done:hover{background:#164d9c}
+@media(max-width:480px){.cfp-about-dialog{padding:20px}.cfp-about-facts div{grid-template-columns:1fr;gap:2px}.cfp-about-heading h2{font-size:19px}}
