@@ -9,6 +9,8 @@ on:
       - 'src-tauri/**'
       - 'rust-toolchain.toml'
       - 'tests/**'
+      - 'scripts/**'
+      - 'branding/**'
       - '.github/workflows/windows.yml'
   pull_request:
     branches: [main]
@@ -74,12 +76,30 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Error instalando Tauri CLI' }
           tauri --version
           if ($LASTEXITCODE -ne 0) { throw 'Tauri CLI no disponible' }
+      - name: Generar iconos oficiales a partir del logotipo
+        shell: pwsh
+        run: |
+          python -m pip install 'Pillow>=10,<13'
+          python scripts/generate_icons.py
+          if ($LASTEXITCODE -ne 0) { throw 'No se pudieron generar los iconos' }
       - name: Compilar NSIS con WebView2 incluido
         shell: pwsh
         working-directory: src-tauri
         run: |
           tauri build ${{ matrix.config }} --bundles nsis
           if ($LASTEXITCODE -ne 0) { throw 'Compilacion Tauri fallida' }
+      - name: Prueba de arranque del ejecutable en Windows
+        shell: pwsh
+        run: |
+          $exe = 'src-tauri/target/release/conta-fp360-desktop.exe'
+          if (-not (Test-Path $exe)) { throw "No existe el ejecutable: $exe" }
+          $p = Start-Process -FilePath (Resolve-Path $exe).Path -PassThru
+          Start-Sleep -Seconds 12
+          $p.Refresh()
+          if ($p.HasExited) { throw "La aplicacion se cerro al arrancar. Codigo: $($p.ExitCode)" }
+          Write-Host "Proceso activo PID=$($p.Id); MainWindowHandle=$($p.MainWindowHandle)"
+          if ($p.MainWindowHandle -eq 0) { Write-Warning 'No se detecto ventana visible en el runner; requiere prueba presencial.' }
+          Stop-Process -Id $p.Id -Force
       - name: Nombrar EXE y generar SHA-256
         shell: pwsh
         run: |
