@@ -78,7 +78,7 @@ $('#changePasswordForm').addEventListener('submit',e=>{e.preventDefault();
     location.reload();
   }).catch(err=>{$('#passwordMessage').textContent=String(err);});
 });
-$('#logout').addEventListener('click',()=>{invoke(async()=>{await api('logout',{});location.reload();});});
+$('#logout').addEventListener('click',async()=>{try{await api('logout',{});}catch(err){console.warn('No se pudo confirmar el cierre en el servidor:',err);}finally{state.token=null;state.user=null;location.reload();}});
 $('#createGroup').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{await api('groups',formData(e.currentTarget));await refresh();msg('Grupo creado.');});});
 $('#enroll').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{const f=formData(e.currentTarget);await api('enroll',{group_id:+f.group_id,student_email:f.student_email});msg('Alumno matriculado.');});});
 $('#newUser').addEventListener('submit',e=>{e.preventDefault();invoke(async()=>{await api('users',formData(e.currentTarget));e.currentTarget.reset();await refresh();msg('Usuario creado con contraseña temporal.');});});
