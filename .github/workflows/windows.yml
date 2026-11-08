@@ -3,12 +3,15 @@ name: CONTA FP360 Desktop - instaladores Windows
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, 'feature/auditoria-integral-2026-11']
     paths:
       - 'web/**'
       - 'src-tauri/**'
       - 'rust-toolchain.toml'
       - 'tests/**'
+      - 'branding/**'
+      - 'scripts/**'
+      - 'central/**'
       - '.github/workflows/windows.yml'
   pull_request:
     branches: [main]
@@ -80,12 +83,37 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Error instalando Tauri CLI' }
           tauri --version
           if ($LASTEXITCODE -ne 0) { throw 'Tauri CLI no disponible' }
+      - name: Instalar Python y generar iconos oficiales
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generar iconos PNG, ICO y favicons
+        shell: pwsh
+        run: |
+          python -m pip install 'Pillow>=10,<13'
+          python scripts/generate_icons.py
+          if ($LASTEXITCODE -ne 0) { throw 'Fallo al generar los iconos oficiales' }
       - name: Compilar NSIS con WebView2 incluido
         shell: pwsh
         working-directory: src-tauri
         run: |
           tauri build ${{ matrix.config }} --bundles nsis
           if ($LASTEXITCODE -ne 0) { throw 'Compilacion Tauri fallida' }
+      - name: Prueba de arranque en Windows (proceso y ventana)
+        shell: pwsh
+        run: |
+          $exe = 'src-tauri/target/release/conta-fp360-desktop.exe'
+          if (-not (Test-Path $exe)) { throw 'No existe el EXE compilado' }
+          $p = Start-Process -FilePath (Resolve-Path $exe).Path -PassThru
+          try {
+            Start-Sleep -Seconds 12
+            $p.Refresh()
+            if ($p.HasExited) { throw "CONTA FP360 se cerró al iniciar (código $($p.ExitCode))." }
+            if ($p.MainWindowHandle -eq 0) { throw 'CONTA FP360 no creó una ventana de escritorio visible.' }
+            Write-Host "Arranque verificado. PID $($p.Id), ventana $($p.MainWindowHandle)."
+          } finally {
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          }
       - name: Nombrar EXE y generar SHA-256
         shell: pwsh
         run: |
