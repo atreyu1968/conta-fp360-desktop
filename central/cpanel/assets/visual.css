@@ -11,3 +11,28 @@ body.authenticated>header{display:none}body.authenticated main{max-width:none;ma
 .chart-progress::-webkit-progress-bar{background:#e8edf5;border-radius:20px}
 .chart-progress::-webkit-progress-value{background:linear-gradient(90deg,#358eec,#38b6ad);border-radius:20px}
 .chart-progress::-moz-progress-bar{background:#358eec;border-radius:20px}
+
+/* CONTA FP360 Central: identidad visual oficial y maquetación compacta */
+#login::before,.brand-mark,.central-header-brand::before{background-image:url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACYAAAAmCAMAAACf4xmcAAAAAXNSR0IArs4c6QAAAARnQU1BAACxjwv8YQUAAAEdUExURajJ8EmO3x5z2Bdv17PQ8h1z2IW06iF12DqF3VKT4UOK3ip62iN22Ym26sve9v///8nd9XKo5n6v6PH2/Nro+DWB3JrA7XOo532u6Pn7/sLZ9Iy3653C7sXb9TiD3LPQ8Rlw10KK3m2k5ZvB7dbl9yZ42UGJ3kWL37zV83Cm5oWz6oq26myk5aDE7qrK8E6R4Gag5Gih5UeM3zSB3JzC7htx11CS4KTG74Gw6YWz6St72rTR8vD1/OHs+bXR8oi16ou366bI7+70/I2465G77Pz9/ufw+vn9/nzZ3yK/yAi3wt309yV42avL8ELI0Ei71G+l5tPj9yx82mzC32Gd40+S4C592w2wxXPH4D2103LG4JC67Mbh9KLY6wAAACmYnn8AAABfdFJOU/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////8Ak5pfLAAAAAlwSFlzAAAOwgAADsIBFShKgAAAABh0RVh0U29mdHdhcmUAUGFpbnQuTkVUIDUuMS45bG7aPgAAALZlWElmSUkqAAgAAAAFABoBBQABAAAASgAAABsBBQABAAAAUgAAACgBAwABAAAAAgAAADEBAgAQAAAAWgAAAGmHBAABAAAAagAAAAAAAADydgEA6AMAAPJ2AQDoAwAAUGFpbnQuTkVUIDUuMS45AAMAAJAHAAQAAAAwMjMwAaADAAEAAAABAAAABaAEAAEAAACUAAAAAAAAAAIAAQACAAQAAABSOTgAAgAHAAQAAAAwMTAwAAAAACsh9yc8QgeUAAABfklEQVQ4T43U11rCQBAF4OAiioqrIopiQRELVlRsoFhQiliwYeX9H8OdyYGPSQxybnbP7P9twkWwGl2lxSxfj3KneYzV34u5K34+t1kAs78SaLFOynbE/OheMc8lhuYdZhZKK339wYFB7DkWMeyRodCwpoyMYkBxsbEwI8p4BDM3mwDhTGLoYlE+npqOzcyaNYapk82xmo/TfsHSizykSJYgtYSigklsHCzOly2jtUewFVKrKCKCrRFLoYgItk5sA0VEsE1iQRQRwbaIbaOICBYitoMiIliaWBRFRLBdYgkUEcGSxPQeWnsEU9PE9lFUBquJZAd83SHvM0fhY6VOsjmdy2YkUxa707P8+cWl1leqwF1fO1jkxp7byRd0sVSulEu3DqaqdyAmYZ8u3lcoD8Tkl/VYs1Et9ZTVJVaVZ2LiOpOq7yX9+mY2OV1mVe/81WvNqvJuM6//ENz2YQQzD2e/Gykwj+eaX1r/5HMws8FRe76+f5qnWP9JV6zR+AXkl5zmdgVnSAAAAABJRU5ErkJggg==")!important;background-size:contain!important;background-position:center!important;background-repeat:no-repeat!important;background-color:transparent!important;color:transparent!important;box-shadow:none!important}
+.central-header-brand{display:flex;align-items:center;gap:12px}
+.central-header-brand::before{content:"";width:37px;height:37px;display:block;flex:none}
+#login::before{content:""!important;width:52px!important;height:52px!important;border-radius:10px!important}
+.brand-mark{min-width:35px!important;width:35px!important;height:35px!important;border-radius:8px!important}
+@media(min-width:1200px){
+.sidebar{flex-basis:210px;width:210px;padding:16px 10px}
+.side-brand{padding:0 7px 14px}
+.side-label{margin:18px 10px 8px}
+.side-link{padding:9px 10px}
+.app-main{padding:17px 22px 30px;max-width:none;width:100%}
+.app-topbar{min-height:54px;padding:9px 22px}
+.page-title-row{margin-bottom:13px}
+.page-title-row h1{font-size:22px}
+.kpi-grid{gap:10px}
+.kpi-card{padding:12px 14px;min-height:100px}
+.kpi-value{font-size:25px}
+.dashboard-grid,.two-col-modern,.library-layout{gap:12px}
+.card,.panel{padding:14px}
+.view-panel label{margin-bottom:9px}
+.view-panel input,.view-panel select,.view-panel textarea{padding:8px 10px}
+table th,table td{padding:9px 10px}
+}
