@@ -1,0 +1,30 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "JyA9iKfU-yq-ED2VWS-H3"
+uri = "file://PLAN_NEGOCIO.md"
+type = "text"
+title = "Plan de negocio — precios desde 10 €"
+description = "Propuesta revisada de precio por aula, costes de autoservicio y viabilidad. La periodicidad y las condiciones detalladas están pendientes de confirmar."
+logical_id = "e5e55e0e-73e0-4902-99a0-1068104f5552"
+content_hash = "sha256:4e9bf3f092b1f683c1826d4473b20a89a485708bf48b95ce5a22043085c28900"
+size = 15850
+mtime_ms = 1794158651685
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:17352da6-43e2-40c2-ab9c-6cac5607259a/e5e55e0e-73e0-4902-99a0-1068104f5552/dd3c9a9f-cfad-44cb-b1ea-3bf98d0bdd7e"
+storage_version_token = "1794158669497865"
+content_type = "text/markdown"
+
+[[outputs]]
+id = "Ec4jnOqtGAFcDSboLKN0s"
+uri = "file://generated-artifacts/central-paypal-preview.png"
+type = "image"
+title = "Vista previa de Central: administración y PayPal"
+description = "Captura visible del panel de administración de Central. Se obtuvo con una cuenta de prueba aislada y credenciales ficticias de Sandbox; no se usó ninguna cuenta real ni se realizaron cobros."
+logical_id = "2df204b4-8947-4806-a9c9-fd0f3672888f"
+content_hash = "sha256:0493b06ea6f291af439d2c24f0239018797ad35d26d3c74b59ea5def0c42c826"
+size = 156326
+mtime_ms = 1794159502963
+storage_uri = "gcs://replit-rams-assets-riker/rams/assets/repl:17352da6-43e2-40c2-ab9c-6cac5607259a/2df204b4-8947-4806-a9c9-fd0f3672888f/7dc846fc-77b6-49f1-a6e5-6a472c71a8dd"
+storage_version_token = "1794159774910265"
+content_type = "image/png"

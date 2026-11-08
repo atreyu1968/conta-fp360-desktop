@@ -2,7 +2,7 @@
 (() => {
   "use strict";
   const edition = document.documentElement.dataset.cfpEdition === "aula" ? "Aula" : "Studio";
-  const version = "2.1.0";
+  const version = "2.3.0";
   const rootId = "cfp-about-overlay";
   let previousFocus = null;
   function show() {

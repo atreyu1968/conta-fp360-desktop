@@ -19,6 +19,7 @@ def check(source,name):
 for ed in ('studio','aula'):
  base=ROOT/'web'/ed
  check((base/'desktop-bridge.js').read_text(encoding='utf-8'),ed+' bridge')
+ check((base/'central-sync.js').read_text(encoding='utf-8'),ed+' central-sync')
  parser=Extract();parser.feed((base/'index.html').read_text(encoding='utf-8'))
  assert parser.scripts,ed+' sin scripts'
  for i,js in enumerate(parser.scripts,1):check(js,ed+' script '+str(i))

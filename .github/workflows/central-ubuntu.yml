@@ -1,0 +1,62 @@
+name: CONTA FP360 Central - Ubuntu Server
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, feature/auditoria-integral-2026-11]
+    paths: ['central/**', 'scripts/build_ubuntu_bundle.py', 'UBUNTU_SERVER.md', 'IMPORTACION.md', 'VALIDACION.md', '.github/workflows/central-ubuntu.yml']
+  pull_request:
+    paths: ['central/**', 'scripts/build_ubuntu_bundle.py', 'UBUNTU_SERVER.md', 'IMPORTACION.md', 'VALIDACION.md', '.github/workflows/central-ubuntu.yml']
+permissions:
+  contents: read
+jobs:
+  central:
+    name: Ubuntu 24.04, PHP 8.3 y SQLite
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, zip, mbstring, fileinfo, curl, sodium
+          coverage: none
+      - name: Sintaxis y esquema original
+        run: |
+          set -euo pipefail
+          find central -name '*.php' -print0 | xargs -0 -n1 php -l
+          python3 central/tests/check_schema.py
+          node --check central/cpanel/assets/dashboard.js
+          node --check central/cpanel/assets/visual.js
+          node --check central/cpanel/assets/paypal.js
+      - name: Compatibilidad cPanel e instalación Ubuntu privada
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y age
+          python3 central/tests/test_installer_http.py
+          python3 central/tests/test_cpanel_http.py
+          python3 central/tests/test_ubuntu_setup.py
+          python3 central/tests/test_ubuntu_recovery.py
+          python3 central/tests/test_ubuntu_offsite.py
+          python3 central/tests/test_ubuntu_http.py
+          python3 central/tests/test_paypal_settings.py
+          python3 central/tests/test_auto_installer.py
+          python3 central/tests/test_ubuntu_update.py
+      - name: Comprobar configuración Apache sin publicar el servidor
+        run: |
+          sudo apt-get install -y apache2 libapache2-mod-php
+          sudo a2enmod ssl headers env setenvif
+          sudo mkdir -p /var/www/conta-fp360/central/cpanel /etc/letsencrypt/live/conta.ejemplo.org
+          sudo cp -a central/cpanel/. /var/www/conta-fp360/central/cpanel/
+          sudo openssl req -x509 -newkey rsa:2048 -nodes -days 1 -subj '/CN=conta.ejemplo.org' \
+            -keyout /etc/letsencrypt/live/conta.ejemplo.org/privkey.pem \
+            -out /etc/letsencrypt/live/conta.ejemplo.org/fullchain.pem
+          sudo cp central/ubuntu/apache-central.conf /etc/apache2/sites-available/conta-central.conf
+          sudo a2ensite conta-central
+          sudo apache2ctl configtest
+      - name: Construir paquete Ubuntu sin datos privados
+        run: python3 scripts/build_ubuntu_bundle.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CONTA-FP360-Central-Ubuntu-Server
+          path: generated-artifacts/CONTA-FP360-Central-Ubuntu-Server.zip*
+          if-no-files-found: error

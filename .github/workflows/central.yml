@@ -1,0 +1,57 @@
+name: CONTA FP360 Central - paquete cPanel
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'feature/auditoria-integral-2026-11']
+    paths:
+      - 'central/**'
+      - '.github/workflows/central.yml'
+permissions:
+  contents: read
+jobs:
+  central:
+    name: Comprobar PHP y empaquetar Central
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configurar PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_sqlite, sqlite3, zip, fileinfo, mbstring
+          coverage: none
+      - name: Validar sintaxis de PHP
+        shell: bash
+        run: |
+          set -euo pipefail
+          find central/cpanel -type f -name '*.php' -print0 | xargs -0 -n1 php -l
+      - name: Generar ZIP de Central listo para cPanel
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+          root = Path('central/cpanel')
+          dest = Path('artifacts/CONTA-FP360-Central-2.5-cPanel.zip')
+          dest.parent.mkdir(parents=True, exist_ok=True)
+          excluded = {'config.php','.env','database.sqlite','database.db'}
+          with ZipFile(dest,'w',ZIP_DEFLATED,compresslevel=9) as bundle:
+              for file in sorted(root.rglob('*')):
+                  if not file.is_file() or file.name in excluded:
+                      continue
+                  if any(p.startswith('.') and p != '.htaccess' for p in file.relative_to(root).parts):
+                      continue
+                  if file.suffix.lower() in ('.sqlite','.db','.log','.bak'):
+                      continue
+                  bundle.write(file,file.relative_to(root).as_posix())
+          assert dest.stat().st_size > 10000, 'ZIP de Central incompleto'
+          print(f'Paquete creado: {dest} ({dest.stat().st_size} bytes)')
+          PY
+      - name: Publicar ZIP de Central
+        uses: actions/upload-artifact@v4
+        with:
+          name: CONTA-FP360-Central-cPanel
+          path: artifacts/CONTA-FP360-Central-2.5-cPanel.zip
+          if-no-files-found: error
+          retention-days: 30

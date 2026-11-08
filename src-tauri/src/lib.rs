@@ -1,3 +1,6 @@
+mod updater;
+mod storage;
+
 use base64::Engine as _;
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
@@ -59,10 +62,44 @@ async fn save_export(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    // Windows GUI applications do not have a console in release mode.
+    // Capture startup panics (including Tauri/plugin initialization) to a
+    // diagnostic file so that installation failures can be investigated.
+    std::panic::set_hook(Box::new(|info| {
+        let diagnostic = std::env::temp_dir().join("CONTA-FP360-arranque-error.txt");
+        let details = format!(
+            "CONTA FP360 2.3.0 - panic de arranque\\n{}\\n\\n{}\\n",
+            info,
+            std::backtrace::Backtrace::force_capture()
+        );
+        let _ = std::fs::write(diagnostic, details);
+    }));
+    // No registrar el plugin updater si aún no existe una clave de firma.
+    // Sin pubkey, Tauri updater 2 puede fallar durante la inicialización y
+    // cerrar Studio/Aula antes de crear la ventana (código de salida 101).
+    // Las actualizaciones firmadas seguirán deshabilitadas hasta configurar
+    // CONTA_FP360_UPDATER_PUBKEY en la compilación y publicar firmas válidas.
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![save_export])
+        .plugin(tauri_plugin_opener::init());
+    if let Some(pubkey) = option_env!("CONTA_FP360_UPDATER_PUBKEY")
+        .filter(|key| !key.trim().is_empty())
+    {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().pubkey(pubkey).build());
+    }
+    builder
+        .invoke_handler(tauri::generate_handler![
+            save_export,
+            updater::cfp_check_update,
+            updater::cfp_install_update,
+            storage::sqlite_get,
+            storage::sqlite_list,
+            storage::sqlite_put,
+            storage::sqlite_put_many,
+            storage::sqlite_delete,
+            storage::sqlite_backup,
+            storage::sqlite_restore
+        ])
         .run(tauri::generate_context!())
         .expect("No se pudo iniciar CONTA FP360 Desktop");
 }

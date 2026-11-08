@@ -1,16 +1,18 @@
 name: CONTA FP360 Desktop - instaladores Windows
+# Ejecucion de verificacion: 2026-11-08, Studio y Aula x64.
 
 on:
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, 'feature/auditoria-integral-2026-11']
     paths:
       - 'web/**'
       - 'src-tauri/**'
       - 'rust-toolchain.toml'
       - 'tests/**'
-      - 'scripts/**'
       - 'branding/**'
+      - 'scripts/**'
+      - 'central/**'
       - '.github/workflows/windows.yml'
   pull_request:
     branches: [main]
@@ -31,16 +33,26 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Preparar iconos oficiales para las pruebas del navegador
+        run: |
+          python -m pip install 'Pillow>=10,<13'
+          python scripts/generate_icons.py
       - name: Validar proyecto
         run: python tests/validate_project.py
+      - name: Verificar manifiestos de actualización (sin clave de firma)
+        run: python tests/test_release_manifest.py
       - name: Comprobar JavaScript
         run: python tests/check_embedded_scripts.py
       - name: Instalar Chromium de pruebas
         run: |
           python -m pip install 'playwright==1.56.0'
           python -m playwright install --with-deps chromium
-      - name: Probar interfaz y exportaciones simuladas
+      - name: Probar SQLite simulado y exportaciones locales
         run: python tests/smoke_browser.py
+      - name: Probar Central offline en Studio y Aula
+        run: python tests/smoke_central.py
+      - name: Verificar interfaz web Central con Chromium
+        run: python tests/smoke_visual_central.py
 
   windows:
     name: Instalador ${{ matrix.edicion }} x64
@@ -54,9 +66,11 @@ jobs:
           - edicion: Studio
             config: ''
             artifact: CONTA-FP360-Studio-Windows-x64
+            binary: conta-fp360-studio
           - edicion: Aula
             config: '--config tauri.aula.conf.json'
             artifact: CONTA-FP360-Aula-Windows-x64
+            binary: conta-fp360-aula
     steps:
       - uses: actions/checkout@v4
       - name: Instalar Rust MSVC
@@ -76,46 +90,107 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Error instalando Tauri CLI' }
           tauri --version
           if ($LASTEXITCODE -ne 0) { throw 'Tauri CLI no disponible' }
-      - name: Generar iconos oficiales a partir del logotipo
+      - name: Instalar Python y generar iconos oficiales
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Generar iconos PNG, ICO y favicons
         shell: pwsh
         run: |
           python -m pip install 'Pillow>=10,<13'
           python scripts/generate_icons.py
-          if ($LASTEXITCODE -ne 0) { throw 'No se pudieron generar los iconos' }
+          if ($LASTEXITCODE -ne 0) { throw 'Fallo al generar los iconos oficiales' }
       - name: Compilar NSIS con WebView2 incluido
         shell: pwsh
         working-directory: src-tauri
         run: |
           tauri build ${{ matrix.config }} --bundles nsis
           if ($LASTEXITCODE -ne 0) { throw 'Compilacion Tauri fallida' }
-      - name: Prueba de arranque del ejecutable en Windows
-        shell: pwsh
-        run: |
-          $exe = 'src-tauri/target/release/conta-fp360-desktop.exe'
-          if (-not (Test-Path $exe)) { throw "No existe el ejecutable: $exe" }
-          $p = Start-Process -FilePath (Resolve-Path $exe).Path -PassThru
-          Start-Sleep -Seconds 12
-          $p.Refresh()
-          if ($p.HasExited) { throw "La aplicacion se cerro al arrancar. Codigo: $($p.ExitCode)" }
-          Write-Host "Proceso activo PID=$($p.Id); MainWindowHandle=$($p.MainWindowHandle)"
-          if ($p.MainWindowHandle -eq 0) { Write-Warning 'No se detecto ventana visible en el runner; requiere prueba presencial.' }
-          Stop-Process -Id $p.Id -Force
       - name: Nombrar EXE y generar SHA-256
         shell: pwsh
         run: |
           $files = @(Get-ChildItem -Path 'src-tauri/target/release/bundle/nsis/*-setup.exe' -File)
           if ($files.Count -ne 1) { throw "Se esperaba un NSIS, encontrados: $($files.Count)" }
           New-Item -ItemType Directory -Force -Path paquete | Out-Null
-          $name = 'CONTA-FP360-${{ matrix.edicion }}-2.1.0-Windows-x64-setup.exe'
+          $name = 'CONTA-FP360-${{ matrix.edicion }}-2.3.0-Windows-x64-setup.exe'
           $dest = Join-Path paquete $name
           Copy-Item -LiteralPath $files[0].FullName -Destination $dest
           if ((Get-Item $dest).Length -lt 1000000) { throw 'Instalador demasiado pequeno' }
           $hash = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $name" | Set-Content -Path "$dest.sha256" -Encoding ascii
-      - name: Guardar instaladores
+      - name: Publicar instalador aunque falle la comprobación gráfica
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
           path: paquete/*
           if-no-files-found: error
           retention-days: 30
+      - name: Prueba de arranque en Windows (proceso y ventana)
+        shell: pwsh
+        run: |
+          $exe = 'src-tauri/target/release/${{ matrix.binary }}.exe'
+          if (-not (Test-Path $exe)) { throw 'No existe el EXE compilado' }
+          $panicFile = Join-Path $env:TEMP 'CONTA-FP360-arranque-error.txt'
+          Remove-Item -LiteralPath $panicFile -ErrorAction SilentlyContinue
+          $p = Start-Process -FilePath (Resolve-Path $exe).Path -PassThru
+          try {
+            Start-Sleep -Seconds 12
+            $p.Refresh()
+            if ($p.HasExited) {
+              if (Test-Path $panicFile) { Write-Host "== PANIC RUST =="; Get-Content -LiteralPath $panicFile }
+              throw "CONTA FP360 se cerró al iniciar (código $($p.ExitCode))."
+            }
+            if ($p.MainWindowHandle -eq 0) { Write-Warning 'No se detecta ventana: el runner podría no disponer de escritorio interactivo. Se necesita validación física.' }
+            Write-Host "Arranque verificado. PID $($p.Id), ventana $($p.MainWindowHandle)."
+          } finally {
+            if (-not $p.HasExited) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue }
+          }
+      - name: Instalar NSIS en Windows y comprobar el arranque de la aplicación instalada
+        shell: pwsh
+        run: |
+          $installer = @(Get-ChildItem -Path 'paquete/*-setup.exe' -File)
+          if ($installer.Count -ne 1) { throw 'No se ha generado exactamente un instalador.' }
+          $target = Join-Path $env:RUNNER_TEMP ('FP360-' + '${{ matrix.edicion }}')
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          $process = Start-Process -FilePath $installer[0].FullName -ArgumentList ('/S /D=' + $target) -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "Fallo al instalar NSIS: $($process.ExitCode)" }
+          $installed = @(Get-ChildItem -Path $target -Recurse -Filter '${{ matrix.binary }}.exe' -File -ErrorAction SilentlyContinue)
+          if ($installed.Count -ne 1) { throw "El instalador no colocó el EXE esperado en $target" }
+          $panicFile = Join-Path $env:TEMP 'CONTA-FP360-arranque-error.txt'
+          Remove-Item -LiteralPath $panicFile -ErrorAction SilentlyContinue
+          $app = Start-Process -FilePath $installed[0].FullName -PassThru
+          try {
+            Start-Sleep -Seconds 12
+            $app.Refresh()
+            if ($app.HasExited) {
+              if (Test-Path $panicFile) { Write-Host "== PANIC RUST INSTALADO =="; Get-Content -LiteralPath $panicFile }
+              throw "La aplicación instalada se cerró al abrir (código $($app.ExitCode))."
+            }
+            if ($app.MainWindowHandle -eq 0) { Write-Warning 'Sin ventana accesible en el runner. No equivale a un fallo probado en Windows interactivo.' }
+            Write-Host "Aplicación instalada funcionando: $($installed[0].FullName)"
+          } finally {
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
+          }
+      - name: Recoger diagnóstico Windows en caso de error
+        if: failure()
+        shell: pwsh
+        run: |
+          New-Item -Path 'diagnostico' -ItemType Directory -Force | Out-Null
+          $panic = Join-Path $env:TEMP 'CONTA-FP360-arranque-error.txt'
+          if (Test-Path $panic) { Copy-Item $panic 'diagnostico/panic-arranque.txt' }
+          $panicFile = Join-Path $env:TEMP 'CONTA-FP360-arranque-error.txt'
+          if (Test-Path $panicFile) { Copy-Item -LiteralPath $panicFile -Destination 'diagnostico/panic-rust.txt' }
+          Get-ChildItem 'src-tauri/target/release' -Filter '*.exe' -ErrorAction SilentlyContinue | Select-Object Name,Length,LastWriteTime | Out-File 'diagnostico/ejecutables.txt'
+          Get-ChildItem 'src-tauri/target/release/bundle/nsis' -ErrorAction SilentlyContinue | Select-Object Name,Length,LastWriteTime | Out-File 'diagnostico/paquetes.txt'
+          Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-40)} -ErrorAction SilentlyContinue |
+            Where-Object { $_.Level -le 3 } |
+            Select-Object -First 30 TimeCreated,ProviderName,Id,Message |
+            Format-List | Out-File 'diagnostico/eventos_windows.txt' -Encoding utf8
+      - name: Publicar diagnóstico de fallos
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DIAGNOSTICO-Windows-${{ matrix.edicion }}
+          path: diagnostico/*
+          if-no-files-found: warn
+          retention-days: 14

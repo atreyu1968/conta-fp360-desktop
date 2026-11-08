@@ -1,0 +1,13 @@
+kind = "api"
+previewPath = "/"
+title = "CONTA FP360 Central"
+version = "1.0.0"
+id = "3B4_FFSkEVBkAeYMFRJ2e"
+
+[[services]]
+localPort = 8080
+name = "Central PHP"
+paths = ["/"]
+
+[services.development]
+run = "php -S 0.0.0.0:$PORT -t ../../central/cpanel ../../central/ubuntu/dev-router.php"

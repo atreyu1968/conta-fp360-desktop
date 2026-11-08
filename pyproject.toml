@@ -1,0 +1,10 @@
+[project]
+name = "conta-fp360-validaciones"
+version = "0.1.0"
+description = "Dependencias de las pruebas de navegador de CONTA FP360; Central se ejecuta con PHP."
+requires-python = ">=3.12"
+dependencies = [
+    "pillow>=10,<13",
+    "playwright==1.56.0",
+]
+
