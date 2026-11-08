@@ -126,6 +126,27 @@ jobs:
           if ((Get-Item $dest).Length -lt 1000000) { throw 'Instalador demasiado pequeno' }
           $hash = (Get-FileHash -LiteralPath $dest -Algorithm SHA256).Hash.ToLowerInvariant()
           "$hash  $name" | Set-Content -Path "$dest.sha256" -Encoding ascii
+      - name: Instalar NSIS en Windows y comprobar el arranque de la aplicación instalada
+        shell: pwsh
+        run: |
+          $installer = @(Get-ChildItem -Path 'paquete/*-setup.exe' -File)
+          if ($installer.Count -ne 1) { throw 'No se ha generado exactamente un instalador.' }
+          $target = Join-Path $env:RUNNER_TEMP ('FP360-' + '${{ matrix.edicion }}')
+          New-Item -ItemType Directory -Force -Path $target | Out-Null
+          $process = Start-Process -FilePath $installer[0].FullName -ArgumentList ('/S /D=' + $target) -PassThru -Wait
+          if ($process.ExitCode -ne 0) { throw "Fallo al instalar NSIS: $($process.ExitCode)" }
+          $installed = @(Get-ChildItem -Path $target -Recurse -Filter 'conta-fp360-desktop.exe' -File -ErrorAction SilentlyContinue)
+          if ($installed.Count -ne 1) { throw "El instalador no colocó el EXE esperado en $target" }
+          $app = Start-Process -FilePath $installed[0].FullName -PassThru
+          try {
+            Start-Sleep -Seconds 12
+            $app.Refresh()
+            if ($app.HasExited) { throw "La aplicación instalada se cerró al abrir (código $($app.ExitCode))." }
+            if ($app.MainWindowHandle -eq 0) { throw 'La aplicación instalada no abrió una ventana visible.' }
+            Write-Host "Aplicación instalada funcionando: $($installed[0].FullName)"
+          } finally {
+            if (-not $app.HasExited) { Stop-Process -Id $app.Id -Force -ErrorAction SilentlyContinue }
+          }
       - name: Guardar instaladores
         uses: actions/upload-artifact@v4
         with:
