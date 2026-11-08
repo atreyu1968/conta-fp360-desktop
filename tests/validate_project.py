@@ -8,6 +8,10 @@ aula=json.loads((ROOT/'src-tauri/tauri.aula.conf.json').read_text(encoding='utf-
 assert base['identifier']!=aula['identifier']
 assert base['mainBinaryName']=='conta-fp360-studio'
 assert aula['mainBinaryName']=='conta-fp360-aula'
+windows=(ROOT/'.github/workflows/windows.yml').read_text(encoding='utf-8')
+assert 'binary: conta-fp360-studio' in windows and 'binary: conta-fp360-aula' in windows
+assert '${{ matrix.binary }}.exe' in windows
+assert 'conta-fp360-desktop.exe' not in windows
 assert base['build']['frontendDist']!=aula['build']['frontendDist']
 assert base['bundle']['windows']['webviewInstallMode']['type']=='offlineInstaller'
 assert base['app']['withGlobalTauri'] is True
