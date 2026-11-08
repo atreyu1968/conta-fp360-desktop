@@ -3,6 +3,7 @@ Cubre contraseña temporal, menú docente, matriz RA/CE, política, historial,
 administración y navegación de alumno. No sustituye las pruebas HTTP reales.
 """
 import json
+import os
 import shutil
 import tempfile
 from functools import partial
@@ -26,7 +27,8 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
     Thread(target=server.serve_forever,daemon=True).start()
     try:
       with sync_playwright() as p:
-        browser=p.chromium.launch(headless=True,args=['--no-sandbox'])
+        browser=p.chromium.launch(headless=True,args=['--no-sandbox'],
+                                 executable_path=os.environ.get('CHROMIUM_EXECUTABLE') or None)
         for role in ('admin','student'):
             state={'temporary':role=='admin','requests':[],'role':role}
             context=browser.new_context(viewport={'width':1366,'height':900})
@@ -41,6 +43,9 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
                     body=json.loads(route.request.post_data or '{}')
                 state['requests'].append((action,body))
                 if action=='login':
+                    if body.get('password')=='wrong-password':
+                        route.fulfill(status=401,json={'ok':False,'error':'Credenciales incorrectas'})
+                        return
                     result={'ok':True,'token':'Z'*64,'user':{'id':12 if role=='admin' else 15,
                         'school_id':1,'name':'Docente de prueba' if role=='admin' else 'Alumno de prueba',
                         'role':role,'must_change_password':state['temporary']}}
@@ -80,6 +85,12 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
             page.route('**/api.php?*',route_api)
             page.goto('http://127.0.0.1:'+str(server.server_port)+'/index.html',wait_until='load')
             assert page.locator('#loginForm').is_visible()
+            page.locator('#loginForm input[name=email]').fill(role+'@example.test')
+            page.locator('#loginForm input[name=password]').fill('wrong-password')
+            page.locator('#loginForm button').click()
+            page.wait_for_function("document.querySelector('#passwordMessage')?.textContent.includes('Credenciales incorrectas')")
+            assert page.locator('#passwordMessage').is_visible()
+            assert page.locator('#app').is_hidden()
             if role=='admin':
                 page.locator('#loginForm input[name=email]').fill('admin@example.test')
                 page.locator('#loginForm input[name=password]').fill('temporary-pass')
@@ -119,6 +130,12 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
                 page.locator('button.side-link[data-view=admin]').click()
                 assert page.locator('#curriculumForm').is_visible()
                 assert page.locator('#resetPasswordForm').is_visible()
+                page.locator('#newUser input[name=name]').fill('Usuario ficticio')
+                page.locator('#newUser input[name=email]').fill('nuevo@example.test')
+                page.locator('#newUser input[name=password]').fill('TemporalPruebas123!')
+                page.locator('#newUser button').click()
+                page.wait_for_function("document.querySelector('#message')?.textContent.includes('Usuario creado')")
+                assert page.locator('#newUser input[name=email]').input_value()==''
                 page.locator('#top-change-password').click()
                 page.locator('#changePasswordForm').wait_for(state='visible')
             else:
