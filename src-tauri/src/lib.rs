@@ -74,10 +74,20 @@ pub fn run() {
         );
         let _ = std::fs::write(diagnostic, details);
     }));
-    tauri::Builder::default()
+    // No registrar el plugin updater si aún no existe una clave de firma.
+    // Sin pubkey, Tauri updater 2 puede fallar durante la inicialización y
+    // cerrar Studio/Aula antes de crear la ventana (código de salida 101).
+    // Las actualizaciones firmadas seguirán deshabilitadas hasta configurar
+    // CONTA_FP360_UPDATER_PUBKEY en la compilación y publicar firmas válidas.
+    let mut builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
-        .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_opener::init());
+    if let Some(pubkey) = option_env!("CONTA_FP360_UPDATER_PUBKEY")
+        .filter(|key| !key.trim().is_empty())
+    {
+        builder = builder.plugin(tauri_plugin_updater::Builder::new().pubkey(pubkey).build());
+    }
+    builder
         .invoke_handler(tauri::generate_handler![
             save_export,
             updater::cfp_check_update,
