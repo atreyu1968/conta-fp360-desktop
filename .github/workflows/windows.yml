@@ -1,4 +1,5 @@
 name: CONTA FP360 Desktop - instaladores Windows
+# Ejecucion de verificacion: 2026-11-08, Studio y Aula x64.
 
 on:
   workflow_dispatch:
