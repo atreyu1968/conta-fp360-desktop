@@ -72,6 +72,13 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
                     result={'ok':True,'items':[{'id':15,'display_name':'Alumno de prueba','email':'a@example.test','role':'student'}]}
                 elif action=='schools':
                     result={'ok':True,'can_create':True,'items':[{'id':1,'name':'Centro de pruebas'}]}
+                elif action=='paypal_settings':
+                    result={'ok':True,'settings':{
+                        'environment':'sandbox','configured':False,'client_id_hint':'',
+                        'verification_status':'unverified','checked_at':None,
+                        'webhook_configured':False,'merchant_configured':False,
+                        'webhook_endpoint':'https://example.test/api.php?r=paypal_webhook',
+                        'revision':0}}
                 elif action=='grade_history':
                     result={'ok':True,'items':[{'id':1,'created_at':'2026-11-07','criterion_code':'RA4.a','instrument':'portafolio',
                         'previous_score':None,'new_score':7.25,'teacher_name':'Docente de prueba'}]}
@@ -104,7 +111,20 @@ with tempfile.TemporaryDirectory(prefix='central_ui_') as tmp:
             page.locator('#loginForm input[name=email]').fill(role+'@example.test')
             page.locator('#loginForm input[name=password]').fill('permanent-pass-1234')
             page.locator('#loginForm button').click()
-            page.locator('.workspace').wait_for(state='visible')
+            try:
+                page.locator('.workspace').wait_for(state='visible')
+            except Exception:
+                print(
+                    'DIAG Central login:',
+                    'role=', role,
+                    'login_visible=', page.locator('#login').is_visible(),
+                    'app_visible=', page.locator('#app').is_visible(),
+                    'status=', page.locator('#passwordMessage').inner_text(),
+                    'message=', page.locator('#message').inner_text(),
+                    'requests=', [action for action, _ in state['requests']],
+                    'page_errors=', errors,
+                )
+                raise
             if role=='admin':
                 page.locator('button.side-link[data-view=assessment]').click()
                 page.locator('details:has(#gradingPolicyForm) summary').click()
