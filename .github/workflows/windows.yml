@@ -128,11 +128,16 @@ jobs:
         run: |
           $exe = 'src-tauri/target/release/conta-fp360-desktop.exe'
           if (-not (Test-Path $exe)) { throw 'No existe el EXE compilado' }
+          $panicFile = Join-Path $env:TEMP 'CONTA-FP360-arranque-error.txt'
+          Remove-Item -LiteralPath $panicFile -ErrorAction SilentlyContinue
           $p = Start-Process -FilePath (Resolve-Path $exe).Path -PassThru
           try {
             Start-Sleep -Seconds 12
             $p.Refresh()
-            if ($p.HasExited) { throw "CONTA FP360 se cerró al iniciar (código $($p.ExitCode))." }
+            if ($p.HasExited) {
+              if (Test-Path $panicFile) { Write-Host "== PANIC RUST =="; Get-Content -LiteralPath $panicFile }
+              throw "CONTA FP360 se cerró al iniciar (código $($p.ExitCode))."
+            }
             if ($p.MainWindowHandle -eq 0) { Write-Warning 'No se detecta ventana: el runner podría no disponer de escritorio interactivo. Se necesita validación física.' }
             Write-Host "Arranque verificado. PID $($p.Id), ventana $($p.MainWindowHandle)."
           } finally {
@@ -149,11 +154,16 @@ jobs:
           if ($process.ExitCode -ne 0) { throw "Fallo al instalar NSIS: $($process.ExitCode)" }
           $installed = @(Get-ChildItem -Path $target -Recurse -Filter 'conta-fp360-desktop.exe' -File -ErrorAction SilentlyContinue)
           if ($installed.Count -ne 1) { throw "El instalador no colocó el EXE esperado en $target" }
+          $panicFile = Join-Path $env:TEMP 'CONTA-FP360-arranque-error.txt'
+          Remove-Item -LiteralPath $panicFile -ErrorAction SilentlyContinue
           $app = Start-Process -FilePath $installed[0].FullName -PassThru
           try {
             Start-Sleep -Seconds 12
             $app.Refresh()
-            if ($app.HasExited) { throw "La aplicación instalada se cerró al abrir (código $($app.ExitCode))." }
+            if ($app.HasExited) {
+              if (Test-Path $panicFile) { Write-Host "== PANIC RUST INSTALADO =="; Get-Content -LiteralPath $panicFile }
+              throw "La aplicación instalada se cerró al abrir (código $($app.ExitCode))."
+            }
             if ($app.MainWindowHandle -eq 0) { Write-Warning 'Sin ventana accesible en el runner. No equivale a un fallo probado en Windows interactivo.' }
             Write-Host "Aplicación instalada funcionando: $($installed[0].FullName)"
           } finally {
@@ -164,6 +174,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -Path 'diagnostico' -ItemType Directory -Force | Out-Null
+          $panicFile = Join-Path $env:TEMP 'CONTA-FP360-arranque-error.txt'
+          if (Test-Path $panicFile) { Copy-Item -LiteralPath $panicFile -Destination 'diagnostico/panic-rust.txt' }
           Get-ChildItem 'src-tauri/target/release' -Filter '*.exe' -ErrorAction SilentlyContinue | Select-Object Name,Length,LastWriteTime | Out-File 'diagnostico/ejecutables.txt'
           Get-ChildItem 'src-tauri/target/release/bundle/nsis' -ErrorAction SilentlyContinue | Select-Object Name,Length,LastWriteTime | Out-File 'diagnostico/paquetes.txt'
           Get-WinEvent -FilterHashtable @{LogName='Application'; StartTime=(Get-Date).AddMinutes(-40)} -ErrorAction SilentlyContinue |
