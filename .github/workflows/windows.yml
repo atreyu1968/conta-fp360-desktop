@@ -174,6 +174,8 @@ jobs:
         shell: pwsh
         run: |
           New-Item -Path 'diagnostico' -ItemType Directory -Force | Out-Null
+          $panic = Join-Path $env:TEMP 'CONTA-FP360-arranque-error.txt'
+          if (Test-Path $panic) { Copy-Item $panic 'diagnostico/panic-arranque.txt' }
           $panicFile = Join-Path $env:TEMP 'CONTA-FP360-arranque-error.txt'
           if (Test-Path $panicFile) { Copy-Item -LiteralPath $panicFile -Destination 'diagnostico/panic-rust.txt' }
           Get-ChildItem 'src-tauri/target/release' -Filter '*.exe' -ErrorAction SilentlyContinue | Select-Object Name,Length,LastWriteTime | Out-File 'diagnostico/ejecutables.txt'
